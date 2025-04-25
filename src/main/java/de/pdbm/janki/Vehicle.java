@@ -36,11 +36,29 @@ public class Vehicle {
 	private boolean connected;
 
 	private boolean onCharger;
+	// 在 Vehicle 类中添加一个方法来强制初始化特性
+	public boolean initializeCharacteristics() {
+		if (this.writeCharacteristic == null) {
+			this.writeCharacteristic = AnkiBle.writeCharacteristicFor(this.bluetoothDevice);
+			if (this.writeCharacteristic != null) {
+				this.writeCharacteristic.writeValue(Message.getSdkMode());
+			}
+		}
 
+		if (this.readCharacteristic == null) {
+			this.readCharacteristic = AnkiBle.readCharacteristicFor(this.bluetoothDevice);
+			if (this.readCharacteristic != null) {
+				this.readCharacteristic.enableValueNotifications(this::onValueNotification);
+			}
+		}
+
+		return this.writeCharacteristic != null && this.readCharacteristic != null;
+	}
 
 	static {
 		AnkiBle.init();
 	}
+
 
 	public Vehicle(BluetoothDevice bluetoothDevice) {
 		this.listeners = new ConcurrentLinkedDeque<>();
