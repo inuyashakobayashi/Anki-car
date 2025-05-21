@@ -70,17 +70,18 @@ public class BluetoothGattCharacteristic {
         this.valueNotificationConsumer = callback;
 
         try {
+            // 获取BluetoothManager实例
+            BluetoothManager manager = BluetoothManager.getBluetoothManager();
+
+            // 注册此特性以接收通知
+            manager.registerCharacteristic(this);
+
             // 启用特性通知
+            System.out.println("正在启用特性通知，路径: " + characteristic.getDbusPath());
             characteristic.startNotify();
-
-            // 这里需要实现监听特性值变化的逻辑
-            // 在hypfvieh库中，这可能需要通过DBus信号监听来实现
-            // 当值变化时调用：callback.accept(newValue);
-
-            // 由于这部分实现可能比较复杂，你可能需要在BluetoothManager中
-            // 添加信号处理代码来支持这个功能
-        } catch (BluezFailedException | BluezInProgressException | BluezNotSupportedException
-                 | BluezNotPermittedException | BluezNotConnectedException e) {
+            System.out.println("特性通知已启用");
+        } catch (Exception e) {
+            System.err.println("启用通知失败: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -101,12 +102,24 @@ public class BluetoothGattCharacteristic {
 
     /**
      * 手动触发值变化通知
-     * 这个方法可以由BluetoothManager在检测到值变化时调用
+     * 这个方法由BluetoothManager在检测到值变化时调用
      *
      * @param value 新的值
      */
     public void notifyValueChanged(byte[] value) {
         if (valueNotificationConsumer != null) {
+            System.out.println("接收到特性值变化通知，UUID: " + getUUID() + ", 数据长度: " + value.length);
+
+            // 打印前几个字节用于调试
+            if (value.length > 0) {
+                System.out.print("数据内容前10字节: [");
+                for (int i = 0; i < Math.min(value.length, 10); i++) {
+                    System.out.print(String.format("%02X ", value[i]));
+                }
+                System.out.println("]");
+            }
+
+            // 调用回调函数处理通知
             valueNotificationConsumer.accept(value);
         }
     }

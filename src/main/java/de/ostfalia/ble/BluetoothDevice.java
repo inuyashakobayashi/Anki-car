@@ -30,7 +30,14 @@ public class BluetoothDevice {
      * @return 是否已连接
      */
     public boolean getConnected() {
-        return device.isConnected();
+        boolean connected = false;
+        try {
+            connected = device.isConnected();
+            System.out.println("检查设备连接状态: " + (connected ? "已连接" : "未连接"));
+        } catch (Exception e) {
+            System.out.println("检查连接状态时出错: " + e.getMessage());
+        }
+        return connected;
     }
 
     /**
