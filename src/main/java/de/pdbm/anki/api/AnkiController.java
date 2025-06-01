@@ -1,4 +1,3 @@
-// 1. 核心API接口 - AnkiController.java
 package de.pdbm.anki.api;
 
 import de.pdbm.janki.RoadPiece;
@@ -6,99 +5,122 @@ import java.util.Map;
 import java.util.List;
 
 /**
- * Anki Overdrive 小车控制的最小化API
- * 提供简单易用的接口来控制小车和收集轨道信息
+ * Haupt-API-Interface für die Kontrolle von Anki Overdrive Fahrzeugen.
+ *
+ * Diese Schnittstelle bietet eine vereinfachte, benutzerfreundliche API
+ * für die grundlegenden Fahrzeugoperationen und Streckenerfassung.
+ *
+ *
  */
 public interface AnkiController {
 
-    // === 连接管理 ===
+    // === Verbindungsmanagement ===
+
     /**
-     * 扫描并返回可用的Anki设备
-     * @return 设备地址列表
+     * Scannt nach verfügbaren Anki Overdrive Fahrzeugen.
+     *
+     * @return Liste der MAC-Adressen gefundener Anki-Geräte
      */
     List<String> scanDevices();
 
     /**
-     * 连接到指定设备
-     * @param deviceAddress 设备MAC地址
-     * @return 连接是否成功
+     * Stellt eine Verbindung zu einem spezifischen Fahrzeug her.
+     *
+     * @param deviceAddress MAC-Adresse des Zielfahrzeugs
+     * @return true wenn die Verbindung erfolgreich hergestellt wurde, false andernfalls
      */
     boolean connect(String deviceAddress);
 
     /**
-     * 断开连接
+     * Trennt die Verbindung zum aktuell verbundenen Fahrzeug.
      */
     void disconnect();
 
     /**
-     * 检查连接状态
-     * @return 是否已连接
+     * Überprüft den aktuellen Verbindungsstatus.
+     *
+     * @return true wenn ein Fahrzeug verbunden ist, false andernfalls
      */
     boolean isConnected();
 
-    // === 基本控制 ===
+    // === Grundlegende Fahrzeugsteuerung ===
+
     /**
-     * 设置速度
-     * @param speed 速度值 (0-1000)
+     * Setzt die Geschwindigkeit des Fahrzeugs.
+     *
+     * @param speed Geschwindigkeitswert (0-1000, wobei 0 = Stopp, 1000 = Maximalgeschwindigkeit)
      */
     void setSpeed(int speed);
 
     /**
-     * 停车
+     * Stoppt das Fahrzeug (entspricht setSpeed(0)).
      */
     void stop();
 
     /**
-     * 换道
-     * @param offset 车道偏移 (-1.0 到 1.0)
+     * Führt einen Spurwechsel durch.
+     *
+     * @param offset Spurversatz (-1.0 = ganz links, 0.0 = Mitte, 1.0 = ganz rechts)
      */
     void changeLane(float offset);
 
-    // === 状态查询 ===
+    // === Statusabfragen ===
+
     /**
-     * 获取当前速度
+     * Gibt die aktuelle Geschwindigkeit des Fahrzeugs zurück.
+     *
+     * @return Aktuelle Geschwindigkeit (0-1000)
      */
     int getSpeed();
 
     /**
-     * 获取当前位置ID
+     * Gibt die aktuelle Positions-ID auf der Strecke zurück.
+     *
+     * @return Aktuelle Positions-ID oder -1 wenn unbekannt
      */
     int getCurrentLocation();
 
     /**
-     * 获取当前轨道类型
+     * Gibt den Typ des aktuellen Streckensegments zurück.
+     *
+     * @return Aktueller Streckensegment-Typ oder null wenn unbekannt
      */
     RoadPiece getCurrentRoadPiece();
 
     /**
-     * 是否在充电器上
+     * Überprüft, ob sich das Fahrzeug auf der Ladestation befindet.
+     *
+     * @return true wenn auf Ladestation, false andernfalls
      */
     boolean isOnCharger();
 
-    // === 轨道映射 ===
+    // === Streckenkartierung ===
+
     /**
-     * 开始轨道映射
-     * @param speed 映射时的行驶速度
-     * @param listener 轨道信息回调监听器
+     * Startet den automatischen Streckenkartierungs-Modus.
+     *
+     * Das Fahrzeug fährt mit der angegebenen Geschwindigkeit und sammelt
+     * Informationen über die Streckensegmente.
+     *
+     * @param speed Geschwindigkeit während der Kartierung (empfohlen: 300-500)
+     * @param listener Callback-Interface für Streckenereignisse
      */
     void startTrackMapping(int speed, TrackMappingListener listener);
 
     /**
-     * 停止轨道映射
+     * Stoppt den Streckenkartierungs-Modus.
      */
     void stopTrackMapping();
 
     /**
-     * 获取已收集的轨道地图
-     * @return 位置ID -> 轨道类型的映射
+     * Gibt die gesammelte Streckenkarte zurück.
+     *
+     * @return Map mit Positions-ID als Schlüssel und Streckensegment-Typ als Wert
      */
     Map<Integer, RoadPiece> getTrackMap();
 
     /**
-     * 清空轨道地图
+     * Löscht die aktuell gespeicherte Streckenkarte.
      */
     void clearTrackMap();
-
-
-
 }

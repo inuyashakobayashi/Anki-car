@@ -1,22 +1,30 @@
+// 2. TrackMappingListener.java - Callback-Interface für Streckenereignisse
 package de.pdbm.anki.api;
 
 import de.pdbm.janki.RoadPiece;
 
-// 2. 轨道映射监听器 - TrackMappingListener.java
+/**
+ * Callback-Interface für Ereignisse während der Streckenkartierung.
+ *
+ * Implementierungen dieses Interfaces erhalten Benachrichtigungen über
+ * neu entdeckte Streckensegmente und Positionsupdates während der Fahrt.
+ */
 public interface TrackMappingListener {
+
     /**
-     * 发现新的轨道片段时回调
-     * @param locationId 位置ID
-     * @param roadPiece 轨道类型
+     * Wird aufgerufen, wenn ein neues Streckensegment entdeckt wird.
+     *
+     * @param locationId Eindeutige ID der Position auf der Strecke
+     * @param roadPiece Typ des Streckensegments (Gerade, Kurve, Start, etc.)
      */
     void onTrackPieceDiscovered(int locationId, RoadPiece roadPiece);
 
     /**
-     * 位置更新时回调
-     * @param locationId 当前位置ID
-     * @param ascending 是否为正向行驶
+     * Wird bei jeder Positionsaktualisierung aufgerufen.
+     *
+     * @param locationId Aktuelle Positions-ID
+     * @param ascending true wenn das Fahrzeug in aufsteigender Richtung fährt,
+     *                  false für absteigende Richtung
      */
     void onLocationUpdate(int locationId, boolean ascending);
 }
-
-

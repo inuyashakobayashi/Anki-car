@@ -4,134 +4,191 @@ import java.util.function.Consumer;
 import java.util.HashMap;
 import java.util.Map;
 import org.bluez.exceptions.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * 适配器类，将com.github.hypfvieh库中的BluetoothGattCharacteristic适配到教授代码所期望的接口
+ * Adapter-Klasse für GATT-Charakteristiken der hypfvieh-Bibliothek.
+ *
+ * Eine GATT-Charakteristik repräsentiert einen spezifischen Datenpunkt eines
+ * Bluetooth-Geräts, über den Daten gelesen, geschrieben oder Benachrichtigungen
+ * empfangen werden können.
+ *
+ * Für Anki-Fahrzeuge gibt es typischerweise:
+ * - Write-Charakteristik: Für Befehle (Geschwindigkeit, Spurwechsel)
+ * - Read-Charakteristik: Für Benachrichtigungen (Position, Batteriestand)
  */
 public class BluetoothGattCharacteristic {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BluetoothGattCharacteristic.class);
+
+    /** Das gekapselte GATT-Charakteristik-Objekt aus der hypfvieh-Bibliothek */
     private final com.github.hypfvieh.bluetooth.wrapper.BluetoothGattCharacteristic characteristic;
 
-    // 存储值通知回调
+    /** Callback-Funktion für Wertänderungs-Benachrichtigungen */
     private Consumer<byte[]> valueNotificationConsumer;
 
+    /**
+     * Konstruktor für BluetoothGattCharacteristic.
+     *
+     * @param characteristic Das zu kapselnde hypfvieh BluetoothGattCharacteristic-Objekt
+     */
     public BluetoothGattCharacteristic(com.github.hypfvieh.bluetooth.wrapper.BluetoothGattCharacteristic characteristic) {
         this.characteristic = characteristic;
     }
 
     /**
-     * 获取特性的UUID
-     * @return 特性UUID
+     * Gibt die eindeutige UUID der GATT-Charakteristik zurück.
+     *
+     * Für Anki-Fahrzeuge sind die wichtigsten UUIDs:
+     * - BE15BEE1-...: Write-Charakteristik (Befehle senden)
+     * - BE15BEE0-...: Read-Charakteristik (Daten empfangen)
+     *
+     * @return Die Charakteristik-UUID in Großbuchstaben
      */
     public String getUUID() {
-        return characteristic.getUuid().toUpperCase(); // 教授代码中使用大写UUID进行比较
+        return characteristic.getUuid().toUpperCase();
     }
 
     /**
-     * 向特性写入数据
-     * @param bytes 要写入的数据
-     * @return 是否写入成功
+     * Schreibt Daten in die Charakteristik.
+     *
+     * Diese Methode wird verwendet, um Befehle an das Anki-Fahrzeug zu senden,
+     * wie z.B. Geschwindigkeitsänderungen oder Spurwechsel-Befehle.
+     *
+     * @param bytes Die zu schreibenden Daten (typischerweise Anki-Befehlsnachrichten)
+     * @return true wenn das Schreiben erfolgreich war, false bei Fehlern
      */
     public boolean writeValue(byte[] bytes) {
         try {
-            // 创建一个空的选项Map
             Map<String, Object> options = new HashMap<>();
             characteristic.writeValue(bytes, options);
+
+            LOGGER.debug("Daten erfolgreich geschrieben: UUID={}, Länge={} Bytes",
+                    getUUID(), bytes.length);
             return true;
+
         } catch (BluezFailedException | BluezInProgressException | BluezNotPermittedException
                  | BluezNotAuthorizedException | BluezNotSupportedException
                  | BluezInvalidValueLengthException e) {
-            e.printStackTrace();
+
+            LOGGER.error("Fehler beim Schreiben in Charakteristik {}: {}", getUUID(), e.getMessage());
             return false;
         }
     }
 
     /**
-     * 读取特性的值
-     * @return 特性的值
+     * Liest den aktuellen Wert der Charakteristik.
+     *
+     * @return Der aktuelle Wert als Byte-Array, oder leeres Array bei Fehlern
      */
     public byte[] readValue() {
         try {
-            // 创建一个空的选项Map
             Map<String, Object> options = new HashMap<>();
-            return characteristic.readValue(options);
+            byte[] value = characteristic.readValue(options);
+
+            LOGGER.debug("Wert gelesen: UUID={}, Länge={} Bytes", getUUID(), value.length);
+            return value;
+
         } catch (BluezFailedException | BluezInProgressException | BluezNotPermittedException
                  | BluezNotAuthorizedException | BluezNotSupportedException
                  | BluezInvalidOffsetException e) {
-            e.printStackTrace();
+
+            LOGGER.error("Fehler beim Lesen der Charakteristik {}: {}", getUUID(), e.getMessage());
             return new byte[0];
         }
     }
 
     /**
-     * 启用值变化通知
-     * @param callback 当值变化时的回调函数
+     * Aktiviert Benachrichtigungen für Wertänderungen dieser Charakteristik.
+     *
+     * Diese Methode ist essentiell für das Empfangen von Fahrzeugdaten wie
+     * Positionsupdates, Batteriestand oder anderen Sensordaten vom Anki-Fahrzeug.
+     *
+     * @param callback Callback-Funktion, die bei Wertänderungen aufgerufen wird
      */
     public void enableValueNotifications(Consumer<byte[]> callback) {
         this.valueNotificationConsumer = callback;
 
         try {
-            // 获取BluetoothManager实例
+            // Bei BluetoothManager für Benachrichtigungen registrieren
             BluetoothManager manager = BluetoothManager.getBluetoothManager();
-
-            // 注册此特性以接收通知
             manager.registerCharacteristic(this);
 
-            // 启用特性通知
-            System.out.println("正在启用特性通知，路径: " + characteristic.getDbusPath());
+            // Benachrichtigungen auf Bluetooth-Ebene aktivieren
             characteristic.startNotify();
-            System.out.println("特性通知已启用");
+
+            LOGGER.debug("Benachrichtigungen aktiviert für Charakteristik: UUID={}, Pfad={}",
+                    getUUID(), characteristic.getDbusPath());
+
         } catch (Exception e) {
-            System.err.println("启用通知失败: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.error("Fehler beim Aktivieren der Benachrichtigungen für {}: {}",
+                    getUUID(), e.getMessage(), e);
         }
     }
 
     /**
-     * 停用值变化通知
+     * Deaktiviert Benachrichtigungen für Wertänderungen.
      */
     public void disableValueNotifications() {
         this.valueNotificationConsumer = null;
 
         try {
-            // 停用特性通知
             characteristic.stopNotify();
+            LOGGER.debug("Benachrichtigungen deaktiviert für Charakteristik: {}", getUUID());
         } catch (BluezFailedException e) {
-            e.printStackTrace();
+            LOGGER.error("Fehler beim Deaktivieren der Benachrichtigungen für {}: {}",
+                    getUUID(), e.getMessage());
         }
     }
 
     /**
-     * 手动触发值变化通知
-     * 这个方法由BluetoothManager在检测到值变化时调用
+     * Verarbeitet eine Wertänderungs-Benachrichtigung.
      *
-     * @param value 新的值
+     * Diese Methode wird vom BluetoothManager aufgerufen, wenn sich der Wert
+     * der Charakteristik ändert. Sie leitet die Benachrichtigung an den
+     * registrierten Callback weiter.
+     *
+     * @param value Der neue Wert der Charakteristik
      */
     public void notifyValueChanged(byte[] value) {
         if (valueNotificationConsumer != null) {
-            System.out.println("接收到特性值变化通知，UUID: " + getUUID() + ", 数据长度: " + value.length);
+            LOGGER.debug("Wertänderungs-Benachrichtigung empfangen: UUID={}, Größe={} Bytes",
+                    getUUID(), value.length);
 
-            // 打印前几个字节用于调试
-            if (value.length > 0) {
-                System.out.print("数据内容前10字节: [");
+            // In Debug-Modus die ersten Bytes ausgeben
+            if (LOGGER.isDebugEnabled() && value.length > 0) {
+                StringBuilder hexString = new StringBuilder();
                 for (int i = 0; i < Math.min(value.length, 10); i++) {
-                    System.out.print(String.format("%02X ", value[i]));
+                    hexString.append(String.format("%02X ", value[i]));
                 }
-                System.out.println("]");
+                LOGGER.debug("Dateninhalt (erste {} Bytes): [{}]",
+                        Math.min(value.length, 10), hexString.toString().trim());
             }
 
-            // 调用回调函数处理通知
+            // Callback aufrufen
             valueNotificationConsumer.accept(value);
         }
     }
 
     /**
-     * 获取底层的hypfvieh特性对象
-     * @return hypfvieh的BluetoothGattCharacteristic对象
+     * Gibt das gekapselte hypfvieh GATT-Charakteristik-Objekt zurück.
+     *
+     * Diese Methode wird hauptsächlich von anderen Adapter-Klassen verwendet,
+     * um auf die zugrundeliegende Implementierung zuzugreifen.
+     *
+     * @return Das hypfvieh BluetoothGattCharacteristic-Objekt
      */
     public com.github.hypfvieh.bluetooth.wrapper.BluetoothGattCharacteristic getWrappedCharacteristic() {
         return characteristic;
     }
 
+    /**
+     * Vergleicht zwei BluetoothGattCharacteristic-Objekte basierend auf ihrer UUID.
+     *
+     * @param obj Das zu vergleichende Objekt
+     * @return true wenn die UUIDs identisch sind, false andernfalls
+     */
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof BluetoothGattCharacteristic) {
@@ -140,6 +197,11 @@ public class BluetoothGattCharacteristic {
         return false;
     }
 
+    /**
+     * Generiert einen Hash-Code basierend auf der Charakteristik-UUID.
+     *
+     * @return Hash-Code der Charakteristik-UUID
+     */
     @Override
     public int hashCode() {
         return getUUID().hashCode();

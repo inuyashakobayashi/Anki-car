@@ -40,43 +40,31 @@ public class Vehicle {
 	public boolean initializeCharacteristics() {
 		boolean success = false;
 
-		// 添加更多调试输出
-		System.out.println("开始初始化特性...");
-		System.out.println("设备MAC地址: " + this.bluetoothDevice.getAddress());
+
 
 		try {
 			// 确保设备已连接
 			if (!this.bluetoothDevice.getConnected()) {
-				System.out.println("设备未连接，尝试重新连接...");
 				this.bluetoothDevice.connect();
 				Thread.sleep(1000); // 给连接一些时间
 			}
 
 			// 初始化写特性
 			if (this.writeCharacteristic == null) {
-				System.out.println("初始化写特性...");
 				this.writeCharacteristic = AnkiBle.writeCharacteristicFor(this.bluetoothDevice);
 				if (this.writeCharacteristic != null) {
-					System.out.println("写特性初始化成功: " + this.writeCharacteristic.getUUID());
 					this.writeCharacteristic.writeValue(Message.getSdkMode());
-					System.out.println("SDK模式命令已发送");
 					Thread.sleep(500); // 给SDK模式命令一些处理时间
 				} else {
-					System.out.println("写特性初始化失败！");
 				}
 			} else {
-				System.out.println("写特性已存在: " + this.writeCharacteristic.getUUID());
 			}
 
 			// 初始化读特性
 			if (this.readCharacteristic == null) {
-				System.out.println("初始化读特性...");
 				this.readCharacteristic = AnkiBle.readCharacteristicFor(this.bluetoothDevice);
 				if (this.readCharacteristic != null) {
-					System.out.println("读特性初始化成功: " + this.readCharacteristic.getUUID());
-					System.out.println("尝试启用通知...");
 					this.readCharacteristic.enableValueNotifications(this::onValueNotification);
-					System.out.println("通知已启用");
 				} else {
 					System.out.println("读特性初始化失败！");
 				}
@@ -101,10 +89,7 @@ public class Vehicle {
 
 		return success;
 	}
-	// 移除静态初始化
-// static {
-//    AnkiBle.init();
-// }
+
 
 	public Vehicle(BluetoothDevice bluetoothDevice) {
 		this.listeners = new ConcurrentLinkedDeque<>();
@@ -112,8 +97,7 @@ public class Vehicle {
 		this.addNotificationListener(new DefaultConnectedNotificationListener());
 		this.addNotificationListener(new DefaultChargerInfoNotificationListener());
 
-		// 不要在这里自动初始化
-		// 等待明确的初始化调用
+
 	}
 
 
@@ -252,15 +236,7 @@ public class Vehicle {
 	 * @param bytes The BLE message bytes
 	 */
 	public void onValueNotification(byte[] bytes) {
-// 添加这些调试输出
-		System.out.println("收到通知! 数据长度: " + bytes.length + " 字节");
-		if (bytes.length > 0) {
-			System.out.print("数据内容前10字节: [");
-			for (int i = 0; i < Math.min(bytes.length, 10); i++) {
-				System.out.print(String.format("%02X ", bytes[i]));
-			}
-			System.out.println("]");
-		}
+
 
 		try {
 			Notification notification = NotificationParser.parse(this, bytes);
@@ -393,47 +369,35 @@ public class Vehicle {
 		 * @return the characteristic
 		 */
 		private static BluetoothGattCharacteristic characteristicFor(String characteristicUUID, BluetoothDevice device) {
-			System.out.println("查找特性: " + characteristicUUID + " 设备: " + device.getAddress());
 
 			BluetoothGattCharacteristic readOrWriteCharacteristic = null;
 
 			// 尝试多次连接和查找特性
 			for (int i = 0; i < 10; i++) {
-				System.out.println("尝试 #" + (i+1) + " 查找特性...");
 
 				boolean connected = device.getConnected();
 				if (!connected) {
-					System.out.println("设备未连接，尝试连接...");
 					connected = device.connect();
 				}
 
 				if (connected) {
-					System.out.println("设备已连接，获取服务列表");
 					List<BluetoothGattService> services = device.getServices();
-					System.out.println("找到 " + services.size() + " 个服务");
 
 					for (BluetoothGattService service : services) {
-						System.out.println("  检查服务: " + service.getUUID());
 						List<BluetoothGattCharacteristic> characteristics = service.getCharacteristics();
-						System.out.println("  服务中有 " + characteristics.size() + " 个特性");
 
 						for (BluetoothGattCharacteristic characteristic : characteristics) {
-							System.out.println("    特性UUID: " + characteristic.getUUID());
 							if (characteristic.getUUID().toUpperCase().equals(characteristicUUID)) {
-								System.out.println("    找到匹配特性!");
 								readOrWriteCharacteristic = characteristic;
 							}
 						}
 					}
 
 					if (readOrWriteCharacteristic != null) {
-						System.out.println("成功找到特性: " + characteristicUUID);
 						return readOrWriteCharacteristic;
 					} else {
-						System.out.println("没有找到特性，将再次尝试");
 					}
 				} else {
-					System.out.println("无法连接设备在 'characteristicFor()'");
 				}
 
 				// 在尝试之间等待

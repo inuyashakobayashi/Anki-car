@@ -5,74 +5,90 @@ import java.util.ArrayList;
 import java.util.function.Consumer;
 
 /**
- * 适配器类，将com.github.hypfvieh库中的BluetoothDevice适配到教授代码所期望的接口
+ * Adapter-Klasse, die das BluetoothDevice aus der com.github.hypfvieh-Bibliothek
+ * an die von der ursprünglichen Implementierung erwartete Schnittstelle anpasst.
+ *
+ * Diese Klasse stellt eine Wrapper-Implementierung dar, die die neue hypfvieh-Bluetooth-Bibliothek
+ * mit dem bestehenden Code kompatibel macht.
  */
 public class BluetoothDevice {
-    private final com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice device; // 内部持有新库中的设备对象
 
-    // 存储连接通知回调
+    /** Das gekapselte BluetoothDevice-Objekt aus der hypfvieh-Bibliothek */
+    private final com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice device;
+
+    /** Callback-Funktion für Verbindungsbenachrichtigungen */
     private Consumer<Boolean> connectedNotificationConsumer;
 
+    /**
+     * Konstruktor für BluetoothDevice
+     *
+     * @param device Das zu kapselnde hypfvieh BluetoothDevice-Objekt
+     */
     public BluetoothDevice(com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice device) {
         this.device = device;
     }
 
     /**
-     * 连接到设备
-     * @return 是否连接成功
+     * Stellt eine Verbindung zum Bluetooth-Gerät her.
+     *
+     * @return true wenn die Verbindung erfolgreich hergestellt wurde, false andernfalls
      */
     public boolean connect() {
         return device.connect();
     }
 
     /**
-     * 获取当前连接状态
-     * @return 是否已连接
+     * Überprüft den aktuellen Verbindungsstatus des Geräts.
+     *
+     * @return true wenn das Gerät verbunden ist, false andernfalls
      */
     public boolean getConnected() {
-        boolean connected = false;
         try {
-            connected = device.isConnected();
-            System.out.println("检查设备连接状态: " + (connected ? "已连接" : "未连接"));
+            return device.isConnected();
         } catch (Exception e) {
-            System.out.println("检查连接状态时出错: " + e.getMessage());
+            // Bei Fehlern wird angenommen, dass das Gerät nicht verbunden ist
+            return false;
         }
-        return connected;
     }
 
     /**
-     * 断开与设备的连接
+     * Trennt die Verbindung zum Bluetooth-Gerät.
      */
     public void disconnect() {
         device.disconnect();
     }
 
     /**
-     * 获取设备MAC地址
-     * @return MAC地址
+     * Gibt die MAC-Adresse des Bluetooth-Geräts zurück.
+     *
+     * @return Die MAC-Adresse als String
      */
     public String getAddress() {
         return device.getAddress();
     }
 
     /**
-     * 获取设备提供的UUID列表
-     * @return UUID列表
+     * Gibt die Liste der vom Gerät bereitgestellten Service-UUIDs zurück.
+     *
+     * @return Liste der UUIDs in Kleinbuchstaben
      */
     public List<String> getUUIDs() {
         List<String> result = new ArrayList<>();
         String[] uuids = device.getUuids();
+
         if (uuids != null) {
             for (String uuid : uuids) {
-                result.add(uuid.toLowerCase()); // 转为小写以匹配教授代码中的比较方式
+                result.add(uuid.toLowerCase());
             }
         }
+
         return result;
     }
 
     /**
-     * 获取设备的服务列表
-     * @return GATT服务列表
+     * Gibt die Liste der verfügbaren GATT-Services des Geräts zurück.
+     *
+     * @return Liste der BluetoothGattService-Objekte
      */
     public List<BluetoothGattService> getServices() {
         List<BluetoothGattService> result = new ArrayList<>();
@@ -88,33 +104,28 @@ public class BluetoothDevice {
     }
 
     /**
-     * 启用连接状态通知
-     * @param callback 回调函数，当连接状态改变时触发
+     * Aktiviert Benachrichtigungen über Änderungen des Verbindungsstatus.
+     *
+     * @param callback Callback-Funktion, die bei Statusänderungen aufgerufen wird
      */
     public void enableConnectedNotifications(Consumer<Boolean> callback) {
         this.connectedNotificationConsumer = callback;
 
-        // 这里你需要设置设备连接状态监听
-        // 在hypfvieh库中，这可能需要通过DBus信号监听来实现
-        // 当状态改变时调用：callback.accept(isConnected);
 
-        // 由于这部分实现可能比较复杂，你可能需要在BluetoothManager中
-        // 添加信号处理代码来支持这个功能
     }
 
     /**
-     * 停用连接状态通知
+     * Deaktiviert Benachrichtigungen über Verbindungsstatusänderungen.
      */
     public void disableConnectedNotifications() {
         this.connectedNotificationConsumer = null;
-        // 取消设备连接状态监听
     }
 
     /**
-     * 手动触发连接状态通知
-     * 这个方法可以由BluetoothManager在检测到连接状态变化时调用
+     * Benachrichtigt registrierte Listener über Änderungen des Verbindungsstatus.
+     * Diese Methode wird typischerweise vom BluetoothManager aufgerufen.
      *
-     * @param connected 当前连接状态
+     * @param connected Der aktuelle Verbindungsstatus
      */
     public void notifyConnectionState(boolean connected) {
         if (connectedNotificationConsumer != null) {
@@ -123,13 +134,22 @@ public class BluetoothDevice {
     }
 
     /**
-     * 获取底层的hypfvieh设备对象
-     * @return hypfvieh的BluetoothDevice对象
+     * Gibt das gekapselte hypfvieh BluetoothDevice-Objekt zurück.
+     * Diese Methode sollte nur verwendet werden, wenn direkter Zugriff auf die
+     * zugrundeliegende Implementierung erforderlich ist.
+     *
+     * @return Das hypfvieh BluetoothDevice-Objekt
      */
     public com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice getWrappedDevice() {
         return device;
     }
 
+    /**
+     * Vergleicht zwei BluetoothDevice-Objekte basierend auf ihrer MAC-Adresse.
+     *
+     * @param obj Das zu vergleichende Objekt
+     * @return true wenn die MAC-Adressen identisch sind, false andernfalls
+     */
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof BluetoothDevice) {
@@ -138,6 +158,11 @@ public class BluetoothDevice {
         return false;
     }
 
+    /**
+     * Generiert einen Hash-Code basierend auf der MAC-Adresse des Geräts.
+     *
+     * @return Hash-Code der MAC-Adresse
+     */
     @Override
     public int hashCode() {
         return getAddress().hashCode();

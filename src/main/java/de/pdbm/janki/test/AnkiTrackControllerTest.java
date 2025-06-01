@@ -5,56 +5,72 @@ import de.ostfalia.ble.BluetoothManager;
 import de.pdbm.janki.RoadPiece;
 import de.pdbm.janki.Vehicle;
 import de.pdbm.janki.notifications.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Anki轨道信息收集增强测试
+ * Erweiterte Testklasse für Anki Overdrive Streckenerfassung und Fahrzeugsteuerung.
+ *
+ * Diese Klasse bietet umfassende Testfunktionen für:
+ * - Bluetooth-Verbindung zu Anki-Fahrzeugen
+ * - Streckenerfassung und -kartierung
+ * - Benachrichtigungssystem-Tests
+ * - Fahrzeugsteuerung (Geschwindigkeit, Spurwechsel)
  */
 public class AnkiTrackControllerTest {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(AnkiTrackControllerTest.class);
+
+    // === Fahrzeug und Verbindung ===
     private static Vehicle vehicle;
 
-    // 轨道信息收集
+    // === Streckeninformationen ===
     private static final Map<Integer, RoadPiece> trackMap = new ConcurrentHashMap<>();
     private static final List<PositionUpdate> positionUpdates = new ArrayList<>();
     private static final List<TransitionUpdate> transitionUpdates = new ArrayList<>();
 
-    // 当前位置信息
+    // === Aktuelle Position ===
     private static int currentLocation = -1;
     private static RoadPiece currentRoadPiece = null;
     private static boolean ascendingLocation = true;
 
-    // 监听器激活标志
+    // === Status-Tracking ===
     private static boolean positionListenerActive = false;
     private static boolean transitionListenerActive = false;
-
-    // 状态计数器
     private static int totalNotificationsReceived = 0;
 
+    /**
+     * Hilfsmethode für Thread-Pausen.
+     */
     private static void delay(long milliseconds) {
         try {
             Thread.sleep(milliseconds);
         } catch (InterruptedException e) {
-
+            Thread.currentThread().interrupt();
+            LOGGER.warn("Thread wurde unterbrochen");
         }
     }
 
+    /**
+     * Testet das Benachrichtigungssystem durch Fahrzeugbewegungen.
+     */
     private static void testNotificationSystem(Scanner scanner) {
-        System.out.println("\n===== 通知系统测试 =====");
-        System.out.println("此测试将验证通知系统是否正常工作");
-        System.out.println("按回车键开始测试...");
+        System.out.println("\n===== Benachrichtigungssystem-Test =====");
+        System.out.println("Dieser Test überprüft, ob das Benachrichtigungssystem funktioniert");
+        System.out.println("Drücken Sie Enter zum Starten...");
         scanner.nextLine();
 
         int startNotifications = totalNotificationsReceived;
 
-        System.out.println("设置低速并执行车道变换以触发通知...");
+        System.out.println("Setze niedrige Geschwindigkeit und führe Spurwechsel durch...");
         vehicle.setSpeed(200);
 
-        System.out.println("执行多次车道变换...");
+        System.out.println("Führe mehrere Spurwechsel durch...");
         for (int i = 0; i < 3; i++) {
-            System.out.println("  变换 " + (i+1) + "/3...");
+            System.out.println("  Spurwechsel " + (i+1) + "/3...");
             vehicle.changeLane(-0.3f);
             delay(1000);
             vehicle.changeLane(0.3f);
@@ -68,26 +84,26 @@ public class AnkiTrackControllerTest {
         int endNotifications = totalNotificationsReceived;
         int newNotifications = endNotifications - startNotifications;
 
-        System.out.println("\n测试结果:");
-        System.out.println("收到 " + newNotifications + " 个新通知");
+        System.out.println("\nTestergebnis:");
+        System.out.println("Empfangen: " + newNotifications + " neue Benachrichtigungen");
 
         if (newNotifications > 0) {
-            System.out.println("通知系统工作正常!");
+            System.out.println("✓ Benachrichtigungssystem funktioniert!");
         } else {
-            System.out.println("未收到任何通知。建议:");
-            System.out.println("1. 检查小车电池");
-            System.out.println("2. 重启小车");
-            System.out.println("3. 确认小车已正确放置在轨道上");
+            System.out.println("✗ Keine Benachrichtigungen empfangen. Empfehlungen:");
+            System.out.println("1. Fahrzeugbatterie prüfen");
+            System.out.println("2. Fahrzeug neu starten");
+            System.out.println("3. Korrekte Platzierung auf der Strecke prüfen");
         }
     }
 
     /**
-     * 设置监听器
+     * Konfiguriert Event-Listener für Fahrzeugbenachrichtigungen.
      */
     private static void setupListeners() {
-        System.out.println("设置事件监听器...");
+        System.out.println("Konfiguriere Event-Listener...");
 
-        // 位置更新监听器
+        // Positionsupdate-Listener
         vehicle.addNotificationListener(new PositionUpdateListener() {
             @Override
             public void onPositionUpdate(PositionUpdate update) {
@@ -95,22 +111,22 @@ public class AnkiTrackControllerTest {
                 totalNotificationsReceived++;
                 positionUpdates.add(update);
 
-                // 更新当前位置
+                // Aktuelle Position aktualisieren
                 currentLocation = update.getLocation();
                 currentRoadPiece = update.getRoadPiece();
                 ascendingLocation = update.isAscendingLocations();
 
-                // 添加到轨道地图
+                // Zur Streckenkarte hinzufügen
                 trackMap.put(currentLocation, currentRoadPiece);
 
-                System.out.println("\n位置更新 #" + positionUpdates.size() + ":");
-                System.out.println("  位置ID: " + currentLocation);
-                System.out.println("  轨道类型: " + currentRoadPiece);
-                System.out.println("  方向: " + (ascendingLocation ? "正向" : "反向"));
+                System.out.println("\n📍 Positionsupdate #" + positionUpdates.size() + ":");
+                System.out.println("  Positions-ID: " + currentLocation);
+                System.out.println("  Streckentyp: " + currentRoadPiece);
+                System.out.println("  Richtung: " + (ascendingLocation ? "vorwärts" : "rückwärts"));
             }
         });
 
-        // 轨道过渡监听器 - 虽然不包含轨道信息，但可以帮助调试
+        // Übergangs-Listener (vereinfacht, da oft redundant)
         vehicle.addNotificationListener(new TransitionUpdateListener() {
             @Override
             public void onTransitionUpdate(TransitionUpdate update) {
@@ -118,37 +134,51 @@ public class AnkiTrackControllerTest {
                 totalNotificationsReceived++;
                 transitionUpdates.add(update);
 
-                System.out.println("\n轨道过渡 #" + transitionUpdates.size() + ":");
-                System.out.println("  位置ID: " + update.getLocation());
-                // 注意：roadPiece可能为null
-                System.out.println("  轨道类型: " + (update.getRoadPiece() == null ? "未知" : update.getRoadPiece()));
+                // Nur wichtige Übergänge anzeigen (nicht die redundanten)
+                if (isSignificantTransition(update)) {
+                    System.out.println("\n🔄 Streckenübergang #" + transitionUpdates.size() + ":");
+                    System.out.println("  Positions-ID: " + update.getLocation());
+                    System.out.println("  Streckentyp: " +
+                            (update.getRoadPiece() != null ? update.getRoadPiece() : "Übergang"));
+                } else {
+                    // Nur in Debug-Modus ausgeben
+                    LOGGER.debug("Übergang (gefiltert): ID={}", update.getLocation());
+                }
             }
         });
 
-        // 添加充电器信息监听器
+        // Ladegerät-Info-Listener
         vehicle.addNotificationListener(new ChargerInfoNotificationListener() {
             @Override
             public void onChargerInfoNotification(ChargerInfoNotification notification) {
-                System.out.println("\n充电器信息更新:");
-                System.out.println("  在充电器上: " + notification.isOnCharger());
+                System.out.println("\n🔋 Ladegerät-Status:");
+                System.out.println("  Auf Ladegerät: " + (notification.isOnCharger() ? "Ja" : "Nein"));
             }
         });
 
-        // 不再添加通用通知监听器，因为它可能与接口定义不符
-
-        System.out.println("事件监听器设置完成");
+        System.out.println("✓ Event-Listener konfiguriert");
     }
 
     /**
-     * 开始轨道映射
+     * Bestimmt, ob ein Übergang signifikant genug ist, um angezeigt zu werden.
+     * Filtert redundante/wiederholte Übergänge heraus.
+     */
+    private static boolean isSignificantTransition(TransitionUpdate update) {
+        // Filtern: Nur Übergänge mit tatsächlichen Streckeninformationen oder neue Positionen
+        return update.getRoadPiece() != null ||
+                (update.getLocation() != 0 && update.getLocation() != currentLocation);
+    }
+
+    /**
+     * Startet den automatischen Streckenkartierungs-Modus.
      */
     private static void startTrackMapping(Scanner scanner) {
-        System.out.println("\n===== 轨道映射模式 =====");
-        System.out.print("请输入映射速度 (建议 300-500): ");
+        System.out.println("\n===== Streckenkartierungs-Modus =====");
+        System.out.print("Geschwindigkeit für Kartierung eingeben (empfohlen 300-500): ");
         int speed = scanner.nextInt();
-        scanner.nextLine(); // 消耗换行符
+        scanner.nextLine(); // Newline konsumieren
 
-        // 清空之前的收集数据
+        // Vorherige Daten löschen
         trackMap.clear();
         positionUpdates.clear();
         transitionUpdates.clear();
@@ -156,255 +186,269 @@ public class AnkiTrackControllerTest {
         currentRoadPiece = null;
 
         try {
-            // 关键步骤：重新初始化通信
-            System.out.println("重新确保SDK模式和通知功能...");
+            // Verbindung neu initialisieren
+            System.out.println("Stelle SDK-Modus und Benachrichtigungen sicher...");
             boolean reinitialized = vehicle.initializeCharacteristics();
-            System.out.println("初始化状态: " + (reinitialized ? "成功" : "失败"));
+            System.out.println("Initialisierung: " + (reinitialized ? "✓ Erfolgreich" : "✗ Fehlgeschlagen"));
 
-            // 重要：给通知系统一些时间启动
-            System.out.println("等待通知系统准备 (5秒)...");
+            // Warten auf Benachrichtigungssystem
+            System.out.println("Warte auf Benachrichtigungssystem (5 Sekunden)...");
             for (int i = 0; i < 5; i++) {
                 System.out.print(".");
                 delay(1000);
             }
-            System.out.println(" 完成");
+            System.out.println(" ✓ Bereit");
 
-            // 开始轨道映射
-            System.out.println("\n开始轨道映射，速度: " + speed);
-            System.out.println("按回车键停止映射...");
+            // Streckenkartierung starten
+            System.out.println("\n🚗 Streckenkartierung gestartet, Geschwindigkeit: " + speed);
+            System.out.println("Drücken Sie Enter zum Stoppen...");
 
-            // 设置车速
+            // Geschwindigkeit setzen
             vehicle.setSpeed(speed);
 
-            // 执行一次车道中心校准，这有时能触发传感器
-            System.out.println("执行车道中心校准...");
+            // Spurkalibrierung
+            System.out.println("Führe Spurkalibrierung durch...");
             vehicle.changeLane(0.0f);
             delay(1000);
 
-            // 等待用户按回车键
+            // Warten auf Benutzereingabe
             scanner.nextLine();
 
-            // 停车
+            // Stoppen
             vehicle.setSpeed(0);
-            System.out.println("轨道映射已停止");
-            // 显示映射结果
-            System.out.println("\n轨道映射结果:");
-            System.out.println("收集到的轨道片段数: " + trackMap.size());
-            System.out.println("位置更新数: " + positionUpdates.size());
-            System.out.println("轨道过渡数: " + transitionUpdates.size());
+            System.out.println("🛑 Streckenkartierung gestoppt");
 
-            if (!trackMap.isEmpty()) {
-                System.out.println("\n轨道地图:");
-                List<Integer> sortedLocations = new ArrayList<>(trackMap.keySet());
-                Collections.sort(sortedLocations);
-
-                for (Integer location : sortedLocations) {
-                    System.out.println("  位置ID: " + location + ", 类型: " + trackMap.get(location));
-                }
-            } else {
-                System.out.println("未收集到轨道信息。");
-            }
+            // Ergebnisse anzeigen
+            displayMappingResults();
 
         } catch (Exception e) {
-            System.out.println("轨道映射出错: " + e.getMessage());
-            vehicle.setSpeed(0); // 确保停车
+            System.out.println("✗ Fehler bei Streckenkartierung: " + e.getMessage());
+            LOGGER.error("Streckenkartierung fehlgeschlagen", e);
+            vehicle.setSpeed(0); // Sicherheitsstop
         }
     }
 
     /**
-     * 执行特殊测试
+     * Zeigt die Ergebnisse der Streckenkartierung an.
+     */
+    private static void displayMappingResults() {
+        System.out.println("\n===== Kartierungsergebnisse =====");
+        System.out.println("📊 Gesammelte Streckensegmente: " + trackMap.size());
+        System.out.println("📍 Positionsupdates: " + positionUpdates.size());
+        System.out.println("🔄 Streckenübergänge: " + transitionUpdates.size());
+
+        if (!trackMap.isEmpty()) {
+            System.out.println("\n🗺️ Streckenkarte:");
+            List<Integer> sortedLocations = new ArrayList<>(trackMap.keySet());
+            Collections.sort(sortedLocations);
+
+            for (Integer location : sortedLocations) {
+                RoadPiece piece = trackMap.get(location);
+                String icon = getIconForRoadPiece(piece);
+                System.out.println("  " + icon + " ID: " + location + " → " + piece);
+            }
+        } else {
+            System.out.println("⚠️ Keine Streckeninformationen gesammelt");
+        }
+    }
+
+    /**
+     * Gibt ein passendes Icon für einen Streckentyp zurück.
+     */
+    private static String getIconForRoadPiece(RoadPiece piece) {
+        if (piece == null) return "❓";
+
+        return switch (piece) {
+            case STRAIGHT -> "➡️";
+            case CORNER -> "🔄";
+            case START -> "🏁";
+            case FINISH -> "🏁";
+            case INTERSECTION -> "✖️";
+            default -> "⭕";
+        };
+    }
+
+    /**
+     * Führt verschiedene Fahrzeugtests durch.
      */
     private static void performSpecialTest(Scanner scanner) {
-        System.out.println("\n===== 特殊测试模式 =====");
-        System.out.println("1: 速度变化测试");
-        System.out.println("2: 紧急启停测试");
-        System.out.println("3: 车道切换测试");
-        System.out.println("4: 返回");
-        System.out.print("请选择测试: ");
+        System.out.println("\n===== Spezielle Fahrzeugtests =====");
+        System.out.println("1: Start-Stopp-Test");
+        System.out.println("2: Spurwechsel-Test");
+        System.out.println("3: Zurück");
+        System.out.print("Test auswählen: ");
 
         int choice = scanner.nextInt();
-        scanner.nextLine(); // 消耗换行符
+        scanner.nextLine(); // Newline konsumieren
 
         switch (choice) {
-
-            case 2:
-                emergencyStartStopTest(scanner);
-                break;
-            case 3:
-                laneChangeTest(scanner);
-                break;
-            case 4:
-            default:
-                return;
+            case 1 -> emergencyStartStopTest(scanner);
+            case 2 -> laneChangeTest(scanner);
+            case 3 -> { /* Zurück */ }
+            default -> System.out.println("Ungültige Auswahl");
         }
     }
 
-
-
     /**
-     * 紧急启停测试
+     * Test für schnelle Start-Stopp-Zyklen.
      */
     private static void emergencyStartStopTest(Scanner scanner) {
-        System.out.println("\n===== 紧急启停测试 =====");
-        System.out.println("此测试将反复快速启动和停止车辆，观察是否能触发更多位置更新");
-        System.out.println("按回车键开始测试...");
+        System.out.println("\n===== Start-Stopp-Test =====");
+        System.out.println("Testet schnelle Start-Stopp-Zyklen für mehr Positionsupdates");
+        System.out.println("Enter drücken zum Starten...");
         scanner.nextLine();
 
         int beforeCount = positionUpdates.size();
         int cycles = 10;
 
         try {
-            System.out.println("执行 " + cycles + " 次启停循环...");
+            System.out.println("Führe " + cycles + " Start-Stopp-Zyklen durch...");
 
             for (int i = 0; i < cycles; i++) {
-                System.out.println("循环 " + (i+1) + ":");
-
-                // 快速启动
-                System.out.println("  启动 (速度 500)");
+                System.out.println("  Zyklus " + (i+1) + ":");
+                System.out.println("    🚀 Start (Geschwindigkeit 500)");
                 vehicle.setSpeed(500);
                 delay(1000);
 
-                // 紧急停止
-                System.out.println("  停止");
+                System.out.println("    🛑 Stopp");
                 vehicle.setSpeed(0);
                 delay(500);
             }
 
-            // 记录结果
             int afterCount = positionUpdates.size();
             int updateCount = afterCount - beforeCount;
 
-            System.out.println("\n测试结果: 触发了 " + updateCount + " 个位置更新");
+            System.out.println("\n📊 Testergebnis: " + updateCount + " neue Positionsupdates");
 
         } catch (Exception e) {
-            System.out.println("测试出错: " + e.getMessage());
+            System.out.println("✗ Test fehlgeschlagen: " + e.getMessage());
             vehicle.setSpeed(0);
         }
     }
 
-
-
     /**
-     * 车道切换测试
+     * Test für Spurwechsel-Manöver.
      */
     private static void laneChangeTest(Scanner scanner) {
-        System.out.println("\n===== 车道切换测试 =====");
-        System.out.println("此测试将在行驶过程中切换车道，观察是否能触发更多位置更新");
-        System.out.println("按回车键开始测试...");
+        System.out.println("\n===== Spurwechsel-Test =====");
+        System.out.println("Testet Spurwechsel während der Fahrt");
+        System.out.println("Enter drücken zum Starten...");
         scanner.nextLine();
 
         int beforeCount = positionUpdates.size();
 
         try {
-            // 开始行驶
-            System.out.println("开始行驶 (速度 300)");
+            System.out.println("🚗 Fahrt starten (Geschwindigkeit 300)");
             vehicle.setSpeed(300);
             delay(2000);
 
-            // 左车道
-            System.out.println("切换到左车道");
+            System.out.println("⬅️ Wechsel zur linken Spur");
             vehicle.changeLane(-0.5f);
             delay(3000);
 
-            // 右车道
-            System.out.println("切换到右车道");
+            System.out.println("➡️ Wechsel zur rechten Spur");
             vehicle.changeLane(0.5f);
             delay(3000);
 
-            // 中间车道
-            System.out.println("切换到中间车道");
+            System.out.println("⬆️ Zurück zur Mitte");
             vehicle.changeLane(0.0f);
             delay(3000);
 
-            // 停车
             vehicle.setSpeed(0);
 
-            // 记录结果
             int afterCount = positionUpdates.size();
             int updateCount = afterCount - beforeCount;
 
-            System.out.println("\n测试结果: 触发了 " + updateCount + " 个位置更新");
+            System.out.println("\n📊 Testergebnis: " + updateCount + " neue Positionsupdates");
 
         } catch (Exception e) {
-            System.out.println("测试出错: " + e.getMessage());
+            System.out.println("✗ Test fehlgeschlagen: " + e.getMessage());
             vehicle.setSpeed(0);
         }
     }
 
     /**
-     * 生成轨道报告
+     * Generiert einen detaillierten Streckenbericht.
      */
     private static void generateTrackReport() {
-        System.out.println("\n===== 轨道信息报告 =====");
+        System.out.println("\n===== Detaillierter Streckenbericht =====");
 
         if (trackMap.isEmpty()) {
-            System.out.println("尚未收集到轨道信息，无法生成报告。");
+            System.out.println("⚠️ Keine Streckeninformationen verfügbar");
             return;
         }
 
-        // 轨道类型统计
+        // Streckentyp-Statistiken
         Map<RoadPiece, Integer> pieceTypeCounts = new HashMap<>();
         for (RoadPiece piece : trackMap.values()) {
             pieceTypeCounts.put(piece, pieceTypeCounts.getOrDefault(piece, 0) + 1);
         }
 
-        System.out.println("轨道类型统计:");
+        System.out.println("📊 Streckentyp-Statistiken:");
         for (Map.Entry<RoadPiece, Integer> entry : pieceTypeCounts.entrySet()) {
-            System.out.println("  " + entry.getKey() + ": " + entry.getValue() + " 片段");
+            String icon = getIconForRoadPiece(entry.getKey());
+            System.out.println("  " + icon + " " + entry.getKey() + ": " + entry.getValue() + " Segmente");
         }
 
-        // 轨道序列
-        System.out.println("\n轨道序列 (按位置ID排序):");
+        // Streckensequenz
+        System.out.println("\n🗺️ Streckensequenz (nach Position sortiert):");
         List<Integer> sortedLocations = new ArrayList<>(trackMap.keySet());
         Collections.sort(sortedLocations);
 
         for (int i = 0; i < sortedLocations.size(); i++) {
             Integer location = sortedLocations.get(i);
             RoadPiece piece = trackMap.get(location);
-            System.out.println("  " + (i+1) + ". 位置ID: " + location + ", 类型: " + piece);
+            String icon = getIconForRoadPiece(piece);
+            System.out.println("  " + (i+1) + ". " + icon + " Position: " + location + " → " + piece);
         }
 
-        // 特殊轨道片段
-        System.out.println("\n特殊轨道片段:");
+        // Besondere Streckensegmente
+        System.out.println("\n🎯 Besondere Streckensegmente:");
+        boolean foundSpecial = false;
         for (Map.Entry<Integer, RoadPiece> entry : trackMap.entrySet()) {
-            if (entry.getValue() == RoadPiece.START) {
-                System.out.println("  起点: 位置ID " + entry.getKey());
-            } else if (entry.getValue() == RoadPiece.FINISH) {
-                System.out.println("  终点: 位置ID " + entry.getKey());
-            } else if (entry.getValue() == RoadPiece.INTERSECTION) {
-                System.out.println("  交叉口: 位置ID " + entry.getKey());
+            String special = switch (entry.getValue()) {
+                case START -> "🏁 Startlinie";
+                case FINISH -> "🏁 Ziellinie";
+                case INTERSECTION -> "✖️ Kreuzung";
+                default -> null;
+            };
+            if (special != null) {
+                System.out.println("  " + special + ": Position " + entry.getKey());
+                foundSpecial = true;
             }
         }
+        if (!foundSpecial) {
+            System.out.println("  Keine besonderen Segmente gefunden");
+        }
 
-        // 监听器状态
-        System.out.println("\n监听器状态:");
-        System.out.println("  位置更新监听器: " + (positionListenerActive ? "已激活" : "未激活"));
-        System.out.println("  轨道过渡监听器: " + (transitionListenerActive ? "已激活" : "未激活"));
-        System.out.println("  总接收到的通知数: " + totalNotificationsReceived);
-        System.out.println("  位置更新数: " + positionUpdates.size());
-        System.out.println("  轨道过渡数: " + transitionUpdates.size());
+        // System-Status
+        System.out.println("\n🔧 System-Status:");
+        System.out.println("  Positionslistener: " + (positionListenerActive ? "✓ Aktiv" : "✗ Inaktiv"));
+        System.out.println("  Übergangslistener: " + (transitionListenerActive ? "✓ Aktiv" : "✗ Inaktiv"));
+        System.out.println("  Gesamt-Benachrichtigungen: " + totalNotificationsReceived);
+        System.out.println("  Positionsupdates: " + positionUpdates.size());
+        System.out.println("  Streckenübergänge: " + transitionUpdates.size());
     }
 
+    // === MAIN-METHODE ===
+
     public static void main(String[] args) {
-        System.out.println("===== Anki轨道信息收集增强测试 =====");
-        System.out.println("正在初始化蓝牙...");
+        System.out.println("===== Anki Overdrive Streckenerfassungs-Test =====");
+        System.out.println("Initialisiere Bluetooth...");
 
-        // 获取蓝牙管理器
         BluetoothManager manager = BluetoothManager.getBluetoothManager();
-
-        // 获取设备列表
         List<BluetoothDevice> devices = manager.getDevices();
 
-        // 打印Anki设备
-        System.out.println("找到的可能是Anki小车的设备:");
+        // Anki-Geräte finden
+        System.out.println("Suche nach Anki-Fahrzeugen:");
         int index = 1;
         for (BluetoothDevice device : devices) {
             List<String> uuids = device.getUUIDs();
             if (uuids != null) {
                 for (String uuid : uuids) {
                     if (uuid.toLowerCase().contains("beef")) {
-                        System.out.println(index + ": MAC地址: " + device.getAddress() +
-                                " UUID: " + uuid + " [可能是Anki小车]");
+                        System.out.println(index + ": MAC: " + device.getAddress() +
+                                " [Anki-Fahrzeug]");
                         index++;
                         break;
                     }
@@ -413,17 +457,17 @@ public class AnkiTrackControllerTest {
         }
 
         if (index == 1) {
-            System.out.println("未找到可能的Anki小车设备。");
+            System.out.println("❌ Keine Anki-Fahrzeuge gefunden");
             return;
         }
 
-        // 选择设备
+        // Gerät auswählen
         Scanner scanner = new Scanner(System.in);
-        System.out.print("请输入要连接的设备编号: ");
+        System.out.print("Fahrzeug auswählen (1-" + (index-1) + "): ");
         int choice = scanner.nextInt();
-        scanner.nextLine(); // 消耗换行符
+        scanner.nextLine();
 
-        // 查找所选设备
+        // Gewähltes Gerät finden
         BluetoothDevice selectedDevice = null;
         index = 1;
         for (BluetoothDevice device : devices) {
@@ -442,136 +486,114 @@ public class AnkiTrackControllerTest {
         }
 
         if (selectedDevice == null) {
-            System.out.println("无效的选择。");
+            System.out.println("❌ Ungültige Auswahl");
             return;
         }
 
-        System.out.println("选择的设备: " + selectedDevice.getAddress());
+        System.out.println("🚗 Gewähltes Fahrzeug: " + selectedDevice.getAddress());
 
-        // 尝试连接
-        System.out.println("尝试连接...");
+        // Verbindung herstellen
+        System.out.println("Verbinde...");
         boolean connected = selectedDevice.connect();
-        System.out.println("连接状态: " + (connected ? "成功" : "失败"));
+        System.out.println("Verbindung: " + (connected ? "✓ Erfolgreich" : "❌ Fehlgeschlagen"));
 
-        // 等待1秒
+        if (!connected) {
+            return;
+        }
+
         delay(1000);
 
-        // 创建Vehicle对象
-        System.out.println("创建Vehicle对象...");
+        // Vehicle-Objekt erstellen
+        System.out.println("Erstelle Vehicle-Objekt...");
         vehicle = new Vehicle(selectedDevice);
 
-        // 再等待一会，让特性初始化
-        System.out.println("等待初始化...");
+        // Initialisierung
+        System.out.println("Warte auf Initialisierung...");
         for (int i = 0; i < 10; i++) {
             System.out.print(".");
             delay(500);
         }
         System.out.println();
 
-        // 在等待初始化后，主动初始化特性
-        System.out.println("初始化特性...");
+        System.out.println("Initialisiere Fahrzeug-Charakteristiken...");
         boolean initialized = vehicle.initializeCharacteristics();
-        System.out.println("特性初始化状态: " + (initialized ? "成功" : "失败"));
+        System.out.println("Initialisierung: " + (initialized ? "✓ Erfolgreich" : "❌ Fehlgeschlagen"));
 
         if (!initialized) {
-            System.out.println("无法初始化车辆特性，程序退出");
+            System.out.println("❌ Kann Fahrzeug nicht initialisieren");
             return;
         }
 
-        // 设置监听器
+        // Event-Listener konfigurieren
         setupListeners();
 
-        // 主菜单
+        // Hauptmenü
         boolean exit = false;
         while (!exit) {
-            System.out.println("\n===== Anki轨道收集菜单 =====");
-            System.out.println("1: 检查状态");
-            System.out.println("2: 手动设置速度");
-            System.out.println("3: 手动切换车道");
-            System.out.println("4: 启动轨道映射");
-            System.out.println("5: 执行特殊测试");
-            System.out.println("6: 生成轨道报告");
-            System.out.println("7: 退出");
-            System.out.println("8: 测试通知系统");
-            System.out.println("9: 测试protocol系统");
+            System.out.println("\n===== 🚗 Anki Fahrzeug-Steuerung =====");
+            System.out.println("1: 📊 Status prüfen");
+            System.out.println("2: 🏃 Geschwindigkeit setzen");
+            System.out.println("3: ↔️ Spurwechsel");
+            System.out.println("4: 🗺️ Streckenkartierung");
+            System.out.println("5: 🧪 Spezielle Tests");
+            System.out.println("6: 📋 Streckenbericht");
+            System.out.println("7: 🔔 Benachrichtigungstest");
+            System.out.println("8: ❌ Beenden");
 
-            System.out.print("请选择: ");
+            System.out.print("Auswahl: ");
 
             int cmd = scanner.nextInt();
-            scanner.nextLine(); // 消耗换行符
+            scanner.nextLine();
 
             switch (cmd) {
-                case 1:
-                    // 检查状态
-                    System.out.println("车辆状态:");
-                    System.out.println("  连接状态: " + (vehicle.isConnected() ? "已连接" : "未连接"));
-                    System.out.println("  准备状态: " + (vehicle.isReadyToStart() ? "已准备" : "未准备"));
-                    System.out.println("  充电器状态: " + (vehicle.isOnCharger() ? "在充电器上" : "不在充电器上"));
-                    System.out.println("  当前速度: " + vehicle.getSpeed());
-                    System.out.println("  当前位置: " + (currentLocation == -1 ? "未知" : currentLocation));
-                    System.out.println("  当前轨道类型: " + (currentRoadPiece == null ? "未知" : currentRoadPiece));
-                    System.out.println("  收集的轨道片段数: " + trackMap.size());
-                    System.out.println("  位置更新数: " + positionUpdates.size());
-                    System.out.println("  轨道过渡数: " + transitionUpdates.size());
-                    System.out.println("  总通知数: " + totalNotificationsReceived);
-                    break;
-
-                case 2:
-                    // 手动设置速度
-                    System.out.print("请输入速度 (0-1000): ");
+                case 1 -> {
+                    // Status prüfen
+                    System.out.println("\n📊 Fahrzeug-Status:");
+                    System.out.println("  🔗 Verbindung: " + (vehicle.isConnected() ? "✓ Verbunden" : "❌ Getrennt"));
+                    System.out.println("  ⚡ Bereit: " + (vehicle.isReadyToStart() ? "✓ Ja" : "❌ Nein"));
+                    System.out.println("  🔋 Ladegerät: " + (vehicle.isOnCharger() ? "✓ Ja" : "❌ Nein"));
+                    System.out.println("  🏃 Geschwindigkeit: " + vehicle.getSpeed());
+                    System.out.println("  📍 Position: " + (currentLocation == -1 ? "Unbekannt" : currentLocation));
+                    System.out.println("  🛣️ Streckentyp: " + (currentRoadPiece == null ? "Unbekannt" : currentRoadPiece));
+                    System.out.println("  🗺️ Kartierte Segmente: " + trackMap.size());
+                    System.out.println("  📊 Benachrichtigungen: " + totalNotificationsReceived);
+                }
+                case 2 -> {
+                    // Geschwindigkeit setzen
+                    System.out.print("Geschwindigkeit (0-1000): ");
                     int speed = scanner.nextInt();
-                    scanner.nextLine(); // 消耗换行符
+                    scanner.nextLine();
 
                     try {
                         vehicle.setSpeed(speed);
-                        System.out.println("已设置速度: " + speed);
+                        System.out.println("✓ Geschwindigkeit gesetzt: " + speed);
                     } catch (Exception e) {
-                        System.out.println("设置速度出错: " + e.getMessage());
+                        System.out.println("❌ Fehler: " + e.getMessage());
                     }
-                    break;
-
-                case 3:
-                    // 手动切换车道
-                    System.out.print("请输入车道偏移量 (-1.0到1.0): ");
+                }
+                case 3 -> {
+                    // Spurwechsel
+                    System.out.print("Spurversatz (-1.0 bis 1.0): ");
                     float offset = scanner.nextFloat();
-                    scanner.nextLine(); // 消耗换行符
+                    scanner.nextLine();
 
                     try {
                         vehicle.changeLane(offset);
-                        System.out.println("已发送车道切换命令，偏移量: " + offset);
+                        System.out.println("✓ Spurwechsel durchgeführt: " + offset);
                     } catch (Exception e) {
-                        System.out.println("切换车道出错: " + e.getMessage());
+                        System.out.println("❌ Fehler: " + e.getMessage());
                     }
-                    break;
-
-                case 4:
-                    // 启动轨道映射
-                    startTrackMapping(scanner);
-                    break;
-
-                case 5:
-                    // 执行特殊测试
-                    performSpecialTest(scanner);
-                    break;
-
-                case 6:
-                    // 生成轨道报告
-                    generateTrackReport();
-                    break;
-
-                case 7:
-                    // 退出
+                }
+                case 4 -> startTrackMapping(scanner);
+                case 5 -> performSpecialTest(scanner);
+                case 6 -> generateTrackReport();
+                case 7 -> testNotificationSystem(scanner);
+                case 8 -> {
                     exit = true;
-                    System.out.println("程序退出");
+                    System.out.println("🛑 Programm beendet");
                     vehicle.setSpeed(0);
-                    break;
-                case 8:
-                    // 测试通知系统
-                    testNotificationSystem(scanner);
-                    break;
-                default:
-                    System.out.println("无效的选择");
-                    break;
+                }
+                default -> System.out.println("❌ Ungültige Auswahl");
             }
         }
 

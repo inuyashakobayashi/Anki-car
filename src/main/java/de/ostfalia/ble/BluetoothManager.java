@@ -10,37 +10,46 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-
 /**
- * 适配器类，将com.github.hypfvieh库中的蓝牙管理功能适配到教授代码所期望的接口
+ * Adapter-Klasse für Bluetooth-Verwaltungsfunktionen der hypfvieh-Bibliothek.
+ *
+ * Diese Klasse stellt eine Singleton-Implementierung für die Bluetooth-Verwaltung bereit
+ * und behandelt die Kommunikation mit Bluetooth-Low-Energy-Geräten über DBus.
  */
 public class BluetoothManager {
 
-    private static BluetoothManager instance;
-    private DeviceManager deviceManager;
-    private final Map<String, BluetoothDevice> deviceCache = new ConcurrentHashMap<>();
-
-    // 添加一个Map来跟踪特性路径和特性对象之间的关系
-    private final Map<String, BluetoothGattCharacteristic> characteristicsByPath = new ConcurrentHashMap<>();
-
     private static final Logger LOGGER = LoggerFactory.getLogger(BluetoothManager.class);
 
+    /** Singleton-Instanz des BluetoothManagers */
+    private static BluetoothManager instance;
+
+    /** Der zugrunde liegende DeviceManager aus der hypfvieh-Bibliothek */
+    private DeviceManager deviceManager;
+
+    /** Cache für bereits erkannte Bluetooth-Geräte */
+    private final Map<String, BluetoothDevice> deviceCache = new ConcurrentHashMap<>();
+
+    /** Zuordnung zwischen DBus-Pfaden und GATT-Charakteristiken für Benachrichtigungen */
+    private final Map<String, BluetoothGattCharacteristic> characteristicsByPath = new ConcurrentHashMap<>();
+
+    /**
+     * Privater Konstruktor für Singleton-Pattern.
+     * Initialisiert den DeviceManager und konfiguriert DBus-Signal-Handler.
+     */
     private BluetoothManager() {
         try {
             deviceManager = DeviceManager.createInstance(false);
-
-            // 设置DBus信号处理
             setupSignalHandlers();
-
-            LOGGER.info("蓝牙管理器初始化完成");
+            LOGGER.info("Bluetooth-Manager erfolgreich initialisiert");
         } catch (Exception e) {
-            LOGGER.error("初始化蓝牙管理器失败: {}", e.getMessage(), e);
+            LOGGER.error("Fehler bei der Initialisierung des Bluetooth-Managers: {}", e.getMessage(), e);
         }
     }
 
     /**
-     * 获取BluetoothManager单例
-     * @return BluetoothManager实例
+     * Gibt die Singleton-Instanz des BluetoothManagers zurück.
+     *
+     * @return Die BluetoothManager-Instanz
      */
     public static BluetoothManager getBluetoothManager() {
         if (instance == null) {
@@ -50,40 +59,159 @@ public class BluetoothManager {
     }
 
     /**
-     * 设置D-Bus信号处理器，用于处理蓝牙事件
+     * Konfiguriert DBus-Signal-Handler für Bluetooth-Ereignisse.
+     *
+     * Diese Methode registriert Handler für PropertiesChanged-Signale,
+     * die für die Überwachung von GATT-Charakteristik-Änderungen verwendet werden.
      */
     private void setupSignalHandlers() {
         try {
-            // 获取DBus连接
-            DBusConnection connection = deviceManager.getDbusConnection();
+            LOGGER.debug("Registriere DBus-Signal-Handler...");
 
-            // 注册PropertiesChanged信号处理器
-            LOGGER.info("正在注册属性变更处理器...");
-
-            // 创建属性变更处理器
             PropertiesChangedHandler propHandler = new PropertiesChangedHandler();
-
-            // 注册处理器
             deviceManager.registerPropertyHandler(propHandler);
 
-            LOGGER.info("属性变更处理器注册完成");
+            LOGGER.debug("DBus-Signal-Handler erfolgreich registriert");
         } catch (Exception e) {
-            LOGGER.error("设置DBus信号处理器失败: {}", e.getMessage(), e);
+            LOGGER.error("Fehler beim Einrichten der DBus-Signal-Handler: {}", e.getMessage(), e);
         }
     }
+
     /**
-     * 注册特性以便在值变化时收到通知
+     * Registriert eine GATT-Charakteristik für Wertänderungs-Benachrichtigungen.
+     *
+     * @param characteristic Die zu registrierende GATT-Charakteristik
      */
     public void registerCharacteristic(BluetoothGattCharacteristic characteristic) {
         if (characteristic != null) {
             String path = characteristic.getWrappedCharacteristic().getDbusPath();
-            LOGGER.debug("注册特性路径: {}, UUID: {}", path, characteristic.getUUID());
             characteristicsByPath.put(path, characteristic);
+            LOGGER.debug("GATT-Charakteristik registriert: Pfad={}, UUID={}", path, characteristic.getUUID());
         }
     }
 
     /**
-     * Properties变更处理器内部类
+     * Gibt eine Liste aller verfügbaren Bluetooth-Geräte zurück.
+     *
+     * Diese Methode führt bei Bedarf eine Geräteerkennung durch und
+     * gibt sowohl bereits bekannte als auch neu erkannte Geräte zurück.
+     *
+     * @return Liste der verfügbaren BluetoothDevice-Objekte
+     */
+    public List<BluetoothDevice> getDevices() {
+        List<BluetoothDevice> result = new ArrayList<>();
+
+        try {
+            List<com.github.hypfvieh.bluetooth.wrapper.BluetoothAdapter> adapters = deviceManager.getAdapters();
+
+            if (adapters.isEmpty()) {
+                LOGGER.warn("Keine Bluetooth-Adapter gefunden");
+                return result;
+            }
+
+            com.github.hypfvieh.bluetooth.wrapper.BluetoothAdapter adapter = adapters.get(0);
+
+            // Adapter einschalten falls notwendig
+            ensureAdapterPowered(adapter);
+
+            // Geräteerkennung durchführen
+            List<com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice> devices = performDeviceDiscovery(adapter);
+
+            // Geräte in Adapter-Objekte konvertieren
+            for (com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice device : devices) {
+                BluetoothDevice adaptedDevice = getOrCreateDevice(device);
+                result.add(adaptedDevice);
+            }
+
+            LOGGER.debug("Insgesamt {} Bluetooth-Geräte gefunden", result.size());
+
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Abrufen der Geräteliste: {}", e.getMessage(), e);
+        }
+
+        return result;
+    }
+
+    /**
+     * Stellt sicher, dass der Bluetooth-Adapter eingeschaltet ist.
+     *
+     * @param adapter Der zu prüfende Bluetooth-Adapter
+     * @throws InterruptedException falls der Thread unterbrochen wird
+     */
+    private void ensureAdapterPowered(com.github.hypfvieh.bluetooth.wrapper.BluetoothAdapter adapter)
+            throws InterruptedException {
+        if (!adapter.isPowered()) {
+            LOGGER.debug("Schalte Bluetooth-Adapter ein...");
+            adapter.setPowered(true);
+            Thread.sleep(2000); // Warten bis Adapter bereit ist
+        }
+    }
+
+    /**
+     * Führt die Bluetooth-Geräteerkennung durch.
+     *
+     * @param adapter Der zu verwendende Bluetooth-Adapter
+     * @return Liste der erkannten Geräte
+     * @throws InterruptedException falls der Thread unterbrochen wird
+     */
+    private List<com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice> performDeviceDiscovery(
+            com.github.hypfvieh.bluetooth.wrapper.BluetoothAdapter adapter) throws InterruptedException {
+
+        // Zunächst bereits bekannte Geräte abrufen
+        List<com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice> devices =
+                deviceManager.scanForBluetoothDevices(adapter.getAddress(), 1000);
+
+        // Falls keine Geräte gefunden wurden, aktive Erkennung starten
+        if (devices.isEmpty()) {
+            LOGGER.debug("Starte aktive Geräteerkennung...");
+
+            adapter.startDiscovery();
+            Thread.sleep(5000); // Erkennungszeit
+            adapter.stopDiscovery();
+
+            devices = deviceManager.scanForBluetoothDevices(adapter.getAddress(), 5000);
+        }
+
+        return devices;
+    }
+
+    /**
+     * Holt ein Gerät aus dem Cache oder erstellt ein neues Adapter-Objekt.
+     *
+     * @param device Das hypfvieh BluetoothDevice-Objekt
+     * @return Das entsprechende BluetoothDevice-Adapter-Objekt
+     */
+    private BluetoothDevice getOrCreateDevice(com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice device) {
+        String address = device.getAddress();
+
+        return deviceCache.computeIfAbsent(address, k -> {
+            LOGGER.debug("Erstelle neues BluetoothDevice für Adresse: {}", address);
+            return new BluetoothDevice(device);
+        });
+    }
+
+    /**
+     * Schließt den BluetoothManager und gibt Ressourcen frei.
+     */
+    public void close() {
+        if (deviceManager != null) {
+            DBusConnection connection = deviceManager.getDbusConnection();
+            if (connection != null) {
+                try {
+                    connection.disconnect();
+                    LOGGER.debug("DBus-Verbindung erfolgreich geschlossen");
+                } catch (Exception e) {
+                    LOGGER.error("Fehler beim Schließen der DBus-Verbindung: {}", e.getMessage(), e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Innere Klasse für die Behandlung von DBus PropertiesChanged-Signalen.
+     *
+     * Diese Klasse überwacht Änderungen an GATT-Charakteristik-Werten und
+     * leitet entsprechende Benachrichtigungen an die registrierten Charakteristiken weiter.
      */
     private class PropertiesChangedHandler extends org.freedesktop.dbus.handlers.AbstractPropertiesChangedHandler {
 
@@ -93,135 +221,66 @@ public class BluetoothManager {
             String interfaceName = signal.getInterfaceName();
             Map<String, Variant<?>> changedProperties = signal.getPropertiesChanged();
 
-            LOGGER.debug("收到属性变更信号: path={}, interface={}", path, interfaceName);
+            // Nur GATT-Charakteristik-Änderungen verarbeiten
+            if (!"org.bluez.GattCharacteristic1".equals(interfaceName)) {
+                return;
+            }
 
-            // 检查是否是GATT特性接口
-            if ("org.bluez.GattCharacteristic1".equals(interfaceName)) {
-                // 检查是否有Value属性变化
-                if (changedProperties.containsKey("Value")) {
-                    try {
-                        // 获取Value属性的新值
-                        Variant<?> variant = changedProperties.get("Value");
-                        Object value = variant.getValue();
+            // Prüfen ob sich der Value geändert hat
+            if (!changedProperties.containsKey("Value")) {
+                return;
+            }
 
-                        // 检查值类型并转换为字节数组
-                        byte[] byteValue = null;
-                        if (value instanceof byte[]) {
-                            byteValue = (byte[]) value;
-                        } else if (value instanceof List) {
-                            // 有时值可能是字节列表
-                            @SuppressWarnings("unchecked")
-                            List<Byte> byteList = (List<Byte>) value;
-                            byteValue = new byte[byteList.size()];
-                            for (int i = 0; i < byteList.size(); i++) {
-                                byteValue[i] = byteList.get(i);
-                            }
-                        }
+            try {
+                byte[] byteValue = extractByteValue(changedProperties.get("Value"));
 
-                        if (byteValue != null) {
-                            // 查找对应的特性对象
-                            BluetoothGattCharacteristic characteristic = characteristicsByPath.get(path);
-
-                            if (characteristic != null) {
-                                LOGGER.debug("转发特性值变化通知: path={}, valueLength={}", path, byteValue.length);
-                                // 通知值变化
-                                characteristic.notifyValueChanged(byteValue);
-                            } else {
-                                LOGGER.warn("未找到特性路径对应的对象: {}", path);
-                            }
-                        }
-                    } catch (Exception e) {
-                        LOGGER.error("处理特性值变化时出错: {}", e.getMessage(), e);
-                    }
+                if (byteValue != null) {
+                    notifyCharacteristicValueChanged(path, byteValue);
                 }
+
+            } catch (Exception e) {
+                LOGGER.error("Fehler bei der Verarbeitung von Charakteristik-Wertänderung: {}", e.getMessage(), e);
             }
         }
 
-//        @Override
-//        public Class<PropertiesChanged> getImplementationClass() {
-//            return PropertiesChanged.class;
-//        }
-    }
-    /**
-     * 获取已发现的蓝牙设备列表
-     * @return 蓝牙设备列表
-     */
-    public List<BluetoothDevice> getDevices() {
-        List<BluetoothDevice> result = new ArrayList<>();
+        /**
+         * Extrahiert den Byte-Array-Wert aus einer DBus-Variant.
+         *
+         * @param variant Die DBus-Variant mit dem Wert
+         * @return Der extrahierte Byte-Array oder null bei Fehlern
+         */
+        private byte[] extractByteValue(Variant<?> variant) {
+            Object value = variant.getValue();
 
-        try {
-            // 确保蓝牙适配器已开启
-            List<com.github.hypfvieh.bluetooth.wrapper.BluetoothAdapter> adapters = deviceManager.getAdapters();
-            if (!adapters.isEmpty()) {
-                com.github.hypfvieh.bluetooth.wrapper.BluetoothAdapter adapter = adapters.get(0);
-
-                // 如果适配器未开启，则尝试开启
-                if (!adapter.isPowered()) {
-                    adapter.setPowered(true);
-                    // 等待适配器开启
-                    Thread.sleep(2000);
+            if (value instanceof byte[]) {
+                return (byte[]) value;
+            } else if (value instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<Byte> byteList = (List<Byte>) value;
+                byte[] result = new byte[byteList.size()];
+                for (int i = 0; i < byteList.size(); i++) {
+                    result[i] = byteList.get(i);
                 }
-
-                // 尝试获取已发现的设备
-                List<com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice> devices = new ArrayList<>();
-
-                // 如果设备列表为空，尝试启动设备发现
-                if (devices.isEmpty()) {
-                    // 启动发现过程
-                    adapter.startDiscovery();
-
-                    // 等待一段时间，让设备被发现
-                    Thread.sleep(5000);
-
-                    // 停止发现
-                    adapter.stopDiscovery();
-
-                    // 再次尝试扫描设备
-                    devices = deviceManager.scanForBluetoothDevices(adapter.getAddress(), 5000);
-                }
-                // 将扫描到的设备转换为适配器对象
-                for (com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice device : devices) {
-                    BluetoothDevice adaptedDevice = getOrCreateDevice(device);
-                    result.add(adaptedDevice);
-                }
+                return result;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("获取设备列表失败: " + e.getMessage());
+
+            return null;
         }
 
-        return result;
-    }
+        /**
+         * Benachrichtigt die entsprechende Charakteristik über eine Wertänderung.
+         *
+         * @param path Der DBus-Pfad der Charakteristik
+         * @param value Der neue Wert
+         */
+        private void notifyCharacteristicValueChanged(String path, byte[] value) {
+            BluetoothGattCharacteristic characteristic = characteristicsByPath.get(path);
 
-    /**
-     * 获取或创建设备适配器对象
-     * @param device hypfvieh库中的设备对象
-     * @return 适配后的设备对象
-     */
-    private BluetoothDevice getOrCreateDevice(com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice device) {
-        // 如果缓存中已存在该设备，则直接返回
-        if (deviceCache.containsKey(device.getAddress())) {
-            return deviceCache.get(device.getAddress());
-        }
-
-        // 否则创建新的适配器对象并缓存
-        BluetoothDevice adaptedDevice = new BluetoothDevice(device);
-        deviceCache.put(device.getAddress(), adaptedDevice);
-        return adaptedDevice;
-    }
-
-    /**
-     * 关闭蓝牙管理器
-     */
-    public void close() {
-        if (deviceManager != null) {
-            DBusConnection connection = deviceManager.getDbusConnection();
-            if (connection != null) {
-                try {
-                    connection.disconnect();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            if (characteristic != null) {
+                LOGGER.debug("Benachrichtige über Wertänderung: Pfad={}, Größe={} Bytes", path, value.length);
+                characteristic.notifyValueChanged(value);
+            } else {
+                LOGGER.debug("Keine registrierte Charakteristik für Pfad: {}", path);
             }
         }
     }
