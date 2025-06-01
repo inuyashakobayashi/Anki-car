@@ -37,7 +37,7 @@ public class AnkiTrackControllerTest {
         try {
             Thread.sleep(milliseconds);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+
         }
     }
 
@@ -207,7 +207,6 @@ public class AnkiTrackControllerTest {
 
         } catch (Exception e) {
             System.out.println("轨道映射出错: " + e.getMessage());
-            e.printStackTrace();
             vehicle.setSpeed(0); // 确保停车
         }
     }
@@ -282,6 +281,8 @@ public class AnkiTrackControllerTest {
             vehicle.setSpeed(0);
         }
     }
+
+
 
     /**
      * 车道切换测试
@@ -492,6 +493,7 @@ public class AnkiTrackControllerTest {
             System.out.println("6: 生成轨道报告");
             System.out.println("7: 退出");
             System.out.println("8: 测试通知系统");
+            System.out.println("9: 测试protocol系统");
 
             System.out.print("请选择: ");
 
@@ -525,7 +527,6 @@ public class AnkiTrackControllerTest {
                         System.out.println("已设置速度: " + speed);
                     } catch (Exception e) {
                         System.out.println("设置速度出错: " + e.getMessage());
-                        e.printStackTrace();
                     }
                     break;
 
@@ -540,7 +541,6 @@ public class AnkiTrackControllerTest {
                         System.out.println("已发送车道切换命令，偏移量: " + offset);
                     } catch (Exception e) {
                         System.out.println("切换车道出错: " + e.getMessage());
-                        e.printStackTrace();
                     }
                     break;
 

@@ -6,7 +6,6 @@ import java.io.IOException;
 
 /**
  * BLE-Nachrichtenformat für Anki als Byte-Array.
- * 
  * Erstes Byte: Anzahl der Bytes
  * Zweites Byte: Identifier
  * Rest: Payload
@@ -25,11 +24,10 @@ public class Message {
 	private static final byte CHANGE_LANE= 0x25;
 	private static final byte SET_OFFSET_FROM_ROAD_CENTER = 0x2c;
 	private static final byte DISCONNECT = 0x0d;
-	
-	
+
+
 	/**
 	 * Returns message representing 'set sdk mode to 1'.
-	 * 
 	 * This message must be send after connecting a device.
 	 * 
 	 * @return message representing 'set sdk mode to 1'
@@ -85,7 +83,7 @@ public class Message {
 			os.write(new byte[] {0});
 			return os.toByteArray();
 		} catch (IOException e) {
-			e.printStackTrace();
+
 			return null;
 		}
 	}
@@ -113,7 +111,7 @@ public class Message {
 			os.write(new byte[] {0});
 			return os.toByteArray();
 		} catch (IOException e) {
-			e.printStackTrace();
+
 			return null;
 		}
 	}
@@ -139,11 +137,11 @@ public class Message {
 			os.write(floatToBytes(0.0f));
 			return os.toByteArray();
 		} catch (IOException e) {
-			e.printStackTrace();
+
 			return null;
 		}
 	}
-	
+
 	private static byte[] shortToBytes(short value) {
 		byte[] bytes = new byte[2];
 		bytes[0] = (byte)(value & 0xff);
