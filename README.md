@@ -1,93 +1,207 @@
-# janki
+# Anki Overdrive Controller
 
+Ein umfassender Anki Overdrive Fahrzeugcontroller mit Bluetooth-Verbindung, Streckenerfassung und Fahrzeugsteuerung.
 
+## 🚀 Schnellstart
 
-## Getting started
+### Systemanforderungen
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- **Betriebssystem**: Linux (getestet auf Pop!_OS )
+- **Java**: JDK 22 (vom Projekt gefordert)
+- **Maven**: 3.6.0 oder höher
+- **Bluetooth**: Bluetooth 4.0+ (BLE) kompatible Adapter
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+### Projektstruktur
 
 ```
-cd existing_repo
-git remote add origin https://gitlab-fi.ostfalia.de/muellber/janki.git
-git branch -M main
-git push -uf origin main
+src/main/java/de/pdbm/anki/example/
+└── AnkiControlExample.java    # Haupt-Controller-Klasse
 ```
 
-## Integrate with your tools
+**Hauptklasse**: `de.pdbm.anki.example.AnkiControlExample`
 
-- [ ] [Set up project integrations](https://gitlab-fi.ostfalia.de/muellber/janki/-/settings/integrations)
+## 📋 Installation und Ausführung
 
-## Collaborate with your team
+### 1. Umgebung vorbereiten
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+Stellen Sie sicher, dass die erforderliche Software installiert ist:
 
-## Test and Deploy
+```bash
+# Java-Version prüfen (JDK 22 erforderlich)
+java -version
 
-Use the built-in continuous integration in GitLab.
+# Maven-Version prüfen
+mvn -version
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+# Bluetooth-Dienst-Status prüfen
+sudo systemctl status bluetooth
+```
 
-***
+### 2. Java 22 installieren
 
-# Editing this README
+Falls Java 22 noch nicht installiert ist:
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
 
-## Suggestions for a good README
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+**Methode : SDKMAN verwenden**
+```bash
+# SDKMAN installieren
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
 
-## Name
-Choose a self-explaining name for your project.
+# Java 22 installieren und als Standard festlegen
+sdk install java 22-open
+sdk default java 22-open
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### 3. Bluetooth vorbereiten
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Bluetooth starten und auffindbar machen:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```bash
+# Bluetooth-Controller starten
+bluetoothctl
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# In bluetoothctl ausführen:
+power on
+agent on
+discoverable on
+scan on
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+**Wichtig**: Anki-Fahrzeug in den Pairing-Modus versetzen (Taste gedrückt halten bis LED blinkt)
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### 4. Programm ausführen
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+**Empfohlene Methode (mit Maven):**
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```bash
+mvn exec:java -Dexec.mainClass="de.pdbm.anki.example.AnkiControlExample"
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+**Alternative Methode (mit kompilierter Klasse):**
 
-## License
-For open source projects, say how it is licensed.
+```bash
+java -cp target/car-controller-1.0-SNAPSHOT.jar de.pdbm.anki.example.AnkiControlExample
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## 🎮 Bedienungsanleitung
+
+### Startablauf
+
+1. **Programm starten** - automatische Bluetooth-Geräteerkennung
+2. **Anki-Fahrzeug auswählen** aus der Liste erkannter Geräte
+3. **Verbindung abwarten** (dauert normalerweise einige Sekunden)
+4. **Funktion wählen** aus dem Hauptmenü
+
+### Hauptfunktionen
+
+```
+===== 🚗 Anki Fahrzeug-Controller =====
+1: 📊 Status prüfen        - Fahrzeugverbindung, Batterie, Position anzeigen
+2: 🏃 Geschwindigkeit       - Fahrzeuggeschwindigkeit steuern (0-1000)
+3: ↔️ Spurwechsel          - Fahrzeugposition auf der Strecke steuern
+4: 🗺️ Streckenerfassung    - Automatische Streckenlayout-Erkennung
+5: 🎮 Grundsteuerung       - Demonstration der Grundfunktionen
+6: 🧪 Spezielle Tests      - Start-Stopp und Spurwechsel-Tests
+7: 📋 Streckenbericht      - Detaillierte Streckenanalyse
+8: 🔔 Benachrichtigungstest - Fahrzeugbenachrichtigungssystem testen
+9: ❌ Beenden
+```
+
+### Streckenerfassung
+
+Die Streckenerfassung ist die Kernfunktion des Programms:
+
+1. Menüpunkt **4: 🗺️ Streckenerfassung** wählen
+2. Erfassungsgeschwindigkeit eingeben (empfohlen: 300-500)
+3. Fahrzeug fährt automatisch und sammelt Streckendaten
+4. Enter drücken zum Stoppen
+5. Gesammelte Streckenkarte und Statistiken anzeigen
+
+## 🔧 Fehlerbehebung
+
+### Häufige Probleme
+
+1. **Anki-Fahrzeug nicht gefunden**
+   ```bash
+   # Bluetooth neu starten
+   sudo systemctl restart bluetooth
+   
+   # Bluetooth-Controller neu starten
+   bluetoothctl
+   scan on
+   ```
+
+2. **Verbindung fehlgeschlagen**
+    - Fahrzeugbatterie prüfen
+    - Fahrzeug neu starten (Taste 5 Sekunden gedrückt halten)
+    - Pairing-Modus prüfen (LED blinkt)
+
+3. **Java-Versionsfehler**
+   ```bash
+   # Java 22 Verwendung sicherstellen
+   java -version
+   
+   # Falls falsche Version, Standard neu setzen
+   sudo update-alternatives --config java
+   ```
+
+4. **Berechtigungsprobleme**
+   ```bash
+   # Benutzer zur Bluetooth-Gruppe hinzufügen
+   sudo usermod -a -G bluetooth $USER
+   # Abmelden und neu anmelden
+   ```
+
+5. **Maven-Kompilierungsfehler**
+   ```bash
+   # Bereinigen und neu kompilieren
+   mvn clean compile
+   
+   # Bei weiteren Problemen Java-Umgebung prüfen
+   mvn -version
+   echo $JAVA_HOME
+   ```
+
+
+
+## 📝 Projektmerkmale
+
+- **Benutzerfreundliche Oberfläche**: Verwendung von Emoji-Icons für bessere Übersicht
+- **Echtzeitüberwachung**: Live-Verfolgung von Fahrzeugposition und Streckendaten
+- **Intelligente Erfassung**: Automatische Erkennung verschiedener Streckentypen
+- **Umfassende Tests**: Verschiedene Testfunktionen zur Systemverifikation
+- **Detaillierte Berichte**: Ausführliche Streckenanalyse mit Statistiken
+
+## 🛠️ Entwicklungshinweise
+
+### Funktionen erweitern
+
+Neue Funktionen hinzufügen:
+
+1. Neue Methoden in `AnkiControlExample.java` hinzufügen
+2. Neue Option in der Hauptmenü-Switch-Anweisung hinzufügen
+3. Neu kompilieren: `mvn clean package`
+
+### Abhängigkeiten
+
+Hauptabhängigkeiten des Projekts:
+- **Anki Janki SDK**: Kern-Fahrzeugsteuerung
+- **Bluetooth BLE Library**: Bluetooth Low Energy Kommunikation
+- **SLF4J**: Protokollierung
+
+
+
+## 📊 Streckentypen
+
+Das System erkennt folgende Streckenelemente:
+
+- **➡️ STRAIGHT**: Gerade Streckenabschnitte
+- **🔄 CORNER**: Kurven
+- **🏁 START/FINISH**: Start-/Ziellinie
+- **✖️ INTERSECTION**: Kreuzungen
+
+
