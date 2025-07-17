@@ -69,16 +69,16 @@ public class Vehicle {
 					System.out.println("读特性初始化失败！");
 				}
 			} else {
-				System.out.println("读特性已存在: " + this.readCharacteristic.getUUID());
+				System.out.println("Characteristic already exists: " + this.readCharacteristic.getUUID());
 			}
 
 			// 设置返回值
 			success = (this.writeCharacteristic != null && this.readCharacteristic != null);
-			System.out.println("特性初始化状态: " + (success ? "成功" : "失败"));
+			System.out.println("read Characteristic initialization state: " + (success ? "successful" : "fail"));
 
 			// 如果初始化成功，再发送一次SDK模式命令确保激活
 			if (success) {
-				System.out.println("再次发送SDK模式命令...");
+				System.out.println("Send the SDK mode command again...");
 				this.writeCharacteristic.writeValue(Message.getSdkMode());
 			}
 
