@@ -87,6 +87,10 @@ mvn exec:java -Dexec.mainClass="de.pdbm.anki.example.AnkiControlExample"
 java -cp target/car-controller-1.0-SNAPSHOT.jar de.pdbm.anki.example.AnkiControlExample
 ```
 
+**javadocs erstellen**
+```bash
+mvn javadoc:javadoc
+```
 ## 🎮 Bedienungsanleitung
 
 ### Startablauf
