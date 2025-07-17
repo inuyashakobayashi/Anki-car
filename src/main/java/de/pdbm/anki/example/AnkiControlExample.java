@@ -15,38 +15,176 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Comprehensive Anki Overdrive controller example
- * Integrates device connection, track mapping, vehicle control and other complete functions
- * Modified version: Separate log output to file
+ * Comprehensive demonstration application for Anki Overdrive vehicle control.
+ *
+ * <p>This application serves as a complete example of how to use the Anki Overdrive
+ * API for vehicle control, track mapping, and data collection. It provides an
+ * interactive console interface with comprehensive logging capabilities.
+ *
+ * <p>Key features include:
+ * <ul>
+ *   <li>Interactive menu-driven vehicle control interface</li>
+ *   <li>Automatic device discovery and connection management</li>
+ *   <li>Real-time position tracking and track mapping</li>
+ *   <li>Comprehensive logging system with file output</li>
+ *   <li>Various test modes for system validation</li>
+ *   <li>Detailed track analysis and reporting</li>
+ * </ul>
+ *
+ * <p>The application implements a dual-output logging system:
+ * <ul>
+ *   <li><strong>Console output:</strong> User interface and important status messages</li>
+ *   <li><strong>File output:</strong> Detailed vehicle activities with timestamps</li>
+ * </ul>
+ *
+ * <p>This separation allows for clean user interaction while maintaining comprehensive
+ * data collection for analysis and debugging purposes.
+ *
+ * <h3>Usage:</h3>
+ * <p>Run the application from the command line. The program will:
+ * <ol>
+ *   <li>Initialize Bluetooth and scan for Anki vehicles</li>
+ *   <li>Present a selection menu for available vehicles</li>
+ *   <li>Establish connection and initialize vehicle control</li>
+ *   <li>Provide an interactive menu for various operations</li>
+ * </ol>
+ *
+ * <h3>Menu Options:</h3>
+ * <ul>
+ *   <li><strong>Check Status:</strong> Display current vehicle status and connection info</li>
+ *   <li><strong>Set Speed:</strong> Control vehicle speed with immediate feedback</li>
+ *   <li><strong>Change Lane:</strong> Adjust vehicle lane position</li>
+ *   <li><strong>Track Mapping:</strong> Automated track discovery and mapping</li>
+ *   <li><strong>Basic Control Demo:</strong> Predefined control sequence demonstration</li>
+ *   <li><strong>Special Tests:</strong> Advanced testing procedures</li>
+ *   <li><strong>Track Report:</strong> Detailed analysis of discovered track layout</li>
+ *   <li><strong>Notification Test:</strong> System validation for event handling</li>
+ * </ul>
+ *
+ * <h3>Thread Safety:</h3>
+ * <p>The application uses {@link ConcurrentHashMap} for thread-safe track data storage
+ * and proper synchronization for multi-threaded event handling.
+ *
+ * <h3>Error Handling:</h3>
+ * <p>All operations include comprehensive error handling with graceful degradation.
+ * Errors are logged to both console and file with appropriate user feedback.
+ *
+ * <h3>System Requirements:</h3>
+ * <ul>
+ *   <li>Java 22 or higher</li>
+ *   <li>Linux system with BlueZ Bluetooth stack</li>
+ *   <li>Anki Overdrive vehicle and track</li>
+ *   <li>Bluetooth Low Energy adapter</li>
+ * </ul>
+ *
+ * @author Zijian Ying
+ * @version 1.0
+ * @since 2025-07-17
+ * @see Vehicle
+ * @see BluetoothManager
+ * @see RoadPiece
  */
 public class AnkiControlExample {
 
+    /** Logger instance for application-wide logging. */
     private static final Logger LOGGER = LoggerFactory.getLogger(AnkiControlExample.class);
 
-    // === File Output ===
+    // === File Output Configuration ===
+
+    /**
+     * Print writer for log file output.
+     * Used for writing detailed vehicle activity logs with timestamps.
+     */
     private static PrintWriter logWriter;
+
+    /**
+     * Base filename for log files.
+     * Actual filename includes timestamp for uniqueness.
+     */
     private static final String LOG_FILE = "anki_vehicle_log.txt";
 
-    // === Vehicle and Connection ===
+    // === Vehicle and Connection Management ===
+
+    /**
+     * Currently connected vehicle instance.
+     * Null if no vehicle is connected.
+     */
     private static Vehicle vehicle;
 
-    // === Track Information ===
+    // === Track Information Storage ===
+
+    /**
+     * Thread-safe map of discovered track pieces indexed by location ID.
+     * Uses ConcurrentHashMap for safe concurrent access during event handling.
+     */
     private static final Map<Integer, RoadPiece> trackMap = new ConcurrentHashMap<>();
+
+    /**
+     * List of all position updates received from the vehicle.
+     * Used for detailed analysis and statistics.
+     */
     private static final List<PositionUpdate> positionUpdates = new ArrayList<>();
+
+    /**
+     * List of all track transition events.
+     * Includes both significant and filtered transitions.
+     */
     private static final List<TransitionUpdate> transitionUpdates = new ArrayList<>();
 
-    // === Current Position ===
+    // === Current Position Tracking ===
+
+    /**
+     * Current location ID of the vehicle.
+     * Value of -1 indicates unknown or uninitialized position.
+     */
     private static int currentLocation = -1;
+
+    /**
+     * Current road piece type at vehicle position.
+     * Null if position is unknown or transitioning.
+     */
     private static RoadPiece currentRoadPiece = null;
+
+    /**
+     * Direction flag indicating track traversal direction.
+     * True for ascending location IDs, false for descending.
+     */
     private static boolean ascendingLocation = true;
 
     // === Status Tracking ===
+
+    /**
+     * Flag indicating if position update listener is receiving events.
+     * Used for system health monitoring.
+     */
     private static boolean positionListenerActive = false;
+
+    /**
+     * Flag indicating if transition listener is receiving events.
+     * Used for system health monitoring.
+     */
     private static boolean transitionListenerActive = false;
+
+    /**
+     * Counter for total notifications received from vehicle.
+     * Used for system performance analysis.
+     */
     private static int totalNotificationsReceived = 0;
 
     /**
-     * Initialize log file
+     * Initializes the log file with timestamp-based filename.
+     *
+     * <p>Creates a new log file with the current timestamp in the filename
+     * to ensure unique log files for each session. The file header includes
+     * session start time and application identification.
+     *
+     * <p>Log files are created in the current working directory with the
+     * format: {@code anki_log_YYYYMMDD_HHMMSS.txt}
+     *
+     * <p>If file creation fails, an error message is displayed but the
+     * application continues to run without file logging.
+     *
+     * @throws IOException if log file cannot be created (handled internally)
      */
     private static void initializeLogFile() {
         try {
@@ -71,7 +209,16 @@ public class AnkiControlExample {
     }
 
     /**
-     * Write to log file (not displayed on console)
+     * Writes a message to the log file with timestamp.
+     *
+     * <p>This method writes messages exclusively to the log file without
+     * displaying them on the console. Each message is prefixed with a
+     * precise timestamp for chronological analysis.
+     *
+     * <p>The timestamp format is {@code HH:mm:ss.SSS} for millisecond precision.
+     * Messages are immediately flushed to ensure data persistence.
+     *
+     * @param message the message to write to the log file
      */
     private static void writeToLog(String message) {
         if (logWriter != null) {
@@ -82,7 +229,13 @@ public class AnkiControlExample {
     }
 
     /**
-     * Write to log file and display on console (for important information)
+     * Writes a message to both log file and console.
+     *
+     * <p>This method is used for important messages that should be visible
+     * to the user while also being recorded in the log file. Typically used
+     * for status updates and critical information.
+     *
+     * @param message the message to write to both outputs
      */
     private static void writeToLogAndConsole(String message) {
         writeToLog(message);
@@ -90,7 +243,13 @@ public class AnkiControlExample {
     }
 
     /**
-     * Thread delay helper method
+     * Utility method for thread delays with interruption handling.
+     *
+     * <p>Provides a safe way to pause execution while properly handling
+     * thread interruptions. If interrupted, the thread's interrupt status
+     * is restored and a warning is logged.
+     *
+     * @param milliseconds the delay duration in milliseconds
      */
     private static void delay(long milliseconds) {
         try {
@@ -102,7 +261,21 @@ public class AnkiControlExample {
     }
 
     /**
-     * Configure vehicle event listeners
+     * Configures event listeners for vehicle notifications.
+     *
+     * <p>Sets up listeners for different types of vehicle events:
+     * <ul>
+     *   <li><strong>Position updates:</strong> Tracked and logged for mapping</li>
+     *   <li><strong>Transition events:</strong> Filtered and recorded</li>
+     *   <li><strong>Charger status:</strong> Displayed and logged</li>
+     * </ul>
+     *
+     * <p>Position updates are used to build the track map and maintain
+     * current location information. Transition events are filtered to
+     * reduce noise while preserving significant changes.
+     *
+     * <p>All events are logged to the file with precise timestamps for
+     * detailed analysis and debugging.
      */
     private static void setupListeners() {
         System.out.println("Configuring event listeners...");
@@ -167,7 +340,17 @@ public class AnkiControlExample {
     }
 
     /**
-     * Determine if transition is significant, filter redundant transitions
+     * Determines if a transition update is significant enough to log.
+     *
+     * <p>Filters transition events to reduce log noise while preserving
+     * important track changes. A transition is considered significant if:
+     * <ul>
+     *   <li>It includes valid road piece information</li>
+     *   <li>The location ID is non-zero and different from current location</li>
+     * </ul>
+     *
+     * @param update the transition update to evaluate
+     * @return true if the transition should be logged, false otherwise
      */
     private static boolean isSignificantTransition(TransitionUpdate update) {
         return update.getRoadPiece() != null ||
@@ -175,7 +358,31 @@ public class AnkiControlExample {
     }
 
     /**
-     * Start track mapping mode
+     * Initiates automatic track mapping at user-specified speed.
+     *
+     * <p>This method implements automated track discovery by driving the vehicle
+     * at a controlled speed while recording position updates. The mapping process
+     * includes:
+     * <ol>
+     *   <li>Data structure initialization and clearing</li>
+     *   <li>Vehicle re-initialization for reliable communication</li>
+     *   <li>Notification system preparation</li>
+     *   <li>Lane calibration for optimal positioning</li>
+     *   <li>Continuous mapping until user interruption</li>
+     * </ol>
+     *
+     * <p>The mapping speed should be chosen carefully:
+     * <ul>
+     *   <li><strong>300-400:</strong> Recommended for accuracy</li>
+     *   <li><strong>500+:</strong> Faster but may miss some positions</li>
+     *   <li><strong>200-:</strong> Very thorough but slow</li>
+     * </ul>
+     *
+     * <p>All mapping activities are logged to the file with detailed timestamps
+     * for analysis and verification.
+     *
+     * @param scanner input scanner for user interaction
+     * @throws RuntimeException if vehicle operations fail during mapping
      */
     private static void startTrackMapping(Scanner scanner) {
         System.out.println("\n===== Track Mapping Mode =====");
@@ -229,7 +436,7 @@ public class AnkiControlExample {
 
             // Stop
             vehicle.setSpeed(0);
-            System.out.println(" Track mapping stopped");
+            System.out.println("🛑 Track mapping stopped");
             writeToLog("Track mapping stopped");
 
             // Display results
@@ -245,7 +452,19 @@ public class AnkiControlExample {
     }
 
     /**
-     * Display mapping results
+     * Displays comprehensive results of the track mapping session.
+     *
+     * <p>Provides both console summary and detailed file logging of mapping
+     * results. The summary includes:
+     * <ul>
+     *   <li>Number of unique track segments discovered</li>
+     *   <li>Total position updates received</li>
+     *   <li>Number of track transitions recorded</li>
+     *   <li>Complete track map with location IDs</li>
+     * </ul>
+     *
+     * <p>The detailed track map is written to the log file with ASCII
+     * representations for better readability in text format.
      */
     private static void displayMappingResults() {
         System.out.println("\n===== Mapping Results =====");
@@ -277,7 +496,13 @@ public class AnkiControlExample {
     }
 
     /**
-     * Return appropriate icon for road type (console version)
+     * Returns appropriate emoji icon for road piece type (console display).
+     *
+     * <p>Provides visual representation of track pieces for console output.
+     * Uses Unicode emoji characters for better visual appeal in the terminal.
+     *
+     * @param piece the road piece type
+     * @return Unicode emoji representing the road piece type
      */
     private static String getIconForRoadPiece(RoadPiece piece) {
         if (piece == null) return "❓";
@@ -293,7 +518,14 @@ public class AnkiControlExample {
     }
 
     /**
-     * Return ASCII icon for road type (log file version)
+     * Returns ASCII icon for road piece type (log file format).
+     *
+     * <p>Provides text-based representation of track pieces for log files.
+     * Uses ASCII characters for better compatibility with text editors
+     * and analysis tools.
+     *
+     * @param piece the road piece type
+     * @return ASCII representation of the road piece type
      */
     private static String getAsciiIconForRoadPiece(RoadPiece piece) {
         if (piece == null) return "[?]";
@@ -309,7 +541,23 @@ public class AnkiControlExample {
     }
 
     /**
-     * Test notification system
+     * Performs comprehensive notification system validation.
+     *
+     * <p>This test verifies that the vehicle's notification system is working
+     * correctly by executing a series of controlled movements and monitoring
+     * the response. The test includes:
+     * <ul>
+     *   <li>Baseline notification count recording</li>
+     *   <li>Controlled speed and lane change sequence</li>
+     *   <li>Notification count analysis</li>
+     *   <li>System health assessment</li>
+     * </ul>
+     *
+     * <p>The test is designed to trigger position updates and verify that
+     * the event handling system is functioning properly. Results are logged
+     * for detailed analysis.
+     *
+     * @param scanner input scanner for user interaction
      */
     private static void testNotificationSystem(Scanner scanner) {
         System.out.println("\n===== Notification System Test =====");
@@ -373,7 +621,18 @@ public class AnkiControlExample {
     }
 
     /**
-     * Perform special vehicle tests
+     * Provides access to specialized vehicle testing procedures.
+     *
+     * <p>Presents a submenu for advanced testing functions including:
+     * <ul>
+     *   <li><strong>Start-Stop Test:</strong> Rapid acceleration/deceleration cycles</li>
+     *   <li><strong>Lane Change Test:</strong> Continuous lane change operations</li>
+     * </ul>
+     *
+     * <p>These tests are designed for system validation and performance
+     * analysis under specific conditions.
+     *
+     * @param scanner input scanner for user interaction
      */
     private static void performSpecialTest(Scanner scanner) {
         System.out.println("\n===== Special Vehicle Tests =====");
@@ -394,12 +653,25 @@ public class AnkiControlExample {
     }
 
     /**
-     * Quick start-stop cycle test
+     * Executes rapid start-stop cycles for position update testing.
+     *
+     * <p>This test performs multiple rapid acceleration and deceleration
+     * cycles to maximize position update generation. The test helps verify:
+     * <ul>
+     *   <li>Position update reliability under changing conditions</li>
+     *   <li>System response to rapid speed changes</li>
+     *   <li>Event handling performance</li>
+     * </ul>
+     *
+     * <p>The test uses high speed (500) for short durations to trigger
+     * maximum position updates while maintaining control.
+     *
+     * @param scanner input scanner for user interaction
      */
     private static void emergencyStartStopTest(Scanner scanner) {
         System.out.println("\n===== Start-Stop Test =====");
         System.out.println("Test quick start-stop cycles to get more position updates");
-        System.out.println("📝 Test process will be logged to file");
+        System.out.println(" Test process will be logged to file");
         System.out.println("Press Enter to start...");
         scanner.nextLine();
 
@@ -416,12 +688,12 @@ public class AnkiControlExample {
                 System.out.println("  Cycle " + (i+1) + "/" + cycles);
                 writeToLog("Cycle " + (i+1) + "/" + cycles + ":");
 
-                System.out.println("     Start (speed 500)");
+                System.out.println("    🚀 Start (speed 500)");
                 writeToLog("  Start - speed 500");
                 vehicle.setSpeed(500);
                 delay(1000);
 
-                System.out.println("     Stop");
+                System.out.println("    🛑 Stop");
                 writeToLog("  Stop");
                 vehicle.setSpeed(0);
                 delay(500);
@@ -443,7 +715,19 @@ public class AnkiControlExample {
     }
 
     /**
-     * Lane change test
+     * Executes continuous lane change operations while driving.
+     *
+     * <p>This test performs lane changes at moderate speed to verify:
+     * <ul>
+     *   <li>Lane change responsiveness and accuracy</li>
+     *   <li>Position tracking during lateral movement</li>
+     *   <li>System stability during combined speed and lane operations</li>
+     * </ul>
+     *
+     * <p>The test sequence includes left lane, right lane, and center
+     * positioning with appropriate delays for completion.
+     *
+     * @param scanner input scanner for user interaction
      */
     private static void laneChangeTest(Scanner scanner) {
         System.out.println("\n===== Lane Change Test =====");
@@ -456,7 +740,7 @@ public class AnkiControlExample {
         writeToLog("===== LANE CHANGE TEST START =====");
 
         try {
-            System.out.println(" Start driving (speed 300)");
+            System.out.println("🚗 Start driving (speed 300)");
             writeToLog("Start driving - speed 300");
             vehicle.setSpeed(300);
             delay(2000);
@@ -495,7 +779,21 @@ public class AnkiControlExample {
     }
 
     /**
-     * Generate detailed track report
+     * Generates comprehensive analysis of discovered track layout.
+     *
+     * <p>Provides detailed statistical analysis of the track mapping data including:
+     * <ul>
+     *   <li><strong>Track Type Statistics:</strong> Count of each road piece type</li>
+     *   <li><strong>Track Sequence:</strong> Ordered list of track segments by location</li>
+     *   <li><strong>Special Segments:</strong> Identification of start, finish, and intersection pieces</li>
+     *   <li><strong>System Status:</strong> Health metrics for listeners and notifications</li>
+     * </ul>
+     *
+     * <p>The report uses dual output format with summary information displayed
+     * on console and detailed data written to the log file for analysis.
+     *
+     * <p>If no track data is available, the method provides appropriate feedback
+     * and suggestions for data collection.
      */
     private static void generateTrackReport() {
         System.out.println("\n===== Detailed Track Report =====");
@@ -525,7 +823,7 @@ public class AnkiControlExample {
         }
 
         // Track sequence
-        System.out.println("\n🗺️ Track Sequence (sorted by location):");
+        System.out.println("\n Track Sequence (sorted by location):");
         System.out.println(" Detailed sequence information saved to log file");
 
         writeToLog("Track Sequence (sorted by location):");
@@ -587,7 +885,28 @@ public class AnkiControlExample {
     }
 
     /**
-     * Basic control demonstration
+     * Demonstrates basic vehicle control operations in sequence.
+     *
+     * <p>This method provides a predefined demonstration of fundamental
+     * vehicle control operations including:
+     * <ol>
+     *   <li>Speed control with moderate acceleration</li>
+     *   <li>Lane change operations (left and return to center)</li>
+     *   <li>Controlled deceleration and stop</li>
+     * </ol>
+     *
+     * <p>The demonstration uses safe parameters and includes appropriate
+     * delays to show each operation clearly. All actions are logged for
+     * verification and analysis.
+     *
+     * <p>This method is useful for:
+     * <ul>
+     *   <li>System validation after connection</li>
+     *   <li>Demonstration of API capabilities</li>
+     *   <li>Basic functionality testing</li>
+     * </ul>
+     *
+     * @param scanner input scanner for user interaction
      */
     private static void demonstrateBasicControl(Scanner scanner) {
         System.out.println("\n=== Basic Control Demo ===");
@@ -625,7 +944,18 @@ public class AnkiControlExample {
     }
 
     /**
-     * Close log file
+     * Safely closes the log file and writes session termination information.
+     *
+     * <p>This method properly terminates the logging session by:
+     * <ul>
+     *   <li>Writing session end timestamp</li>
+     *   <li>Adding session termination marker</li>
+     *   <li>Flushing and closing the file writer</li>
+     *   <li>Providing user feedback about log file completion</li>
+     * </ul>
+     *
+     * <p>The method is safe to call multiple times and handles null
+     * writer gracefully.
      */
     private static void closeLogFile() {
         if (logWriter != null) {
@@ -637,7 +967,52 @@ public class AnkiControlExample {
         }
     }
 
-    // === Main Method ===
+    /**
+     * Main application entry point.
+     *
+     * <p>This method orchestrates the complete application workflow including:
+     * <ol>
+     *   <li><strong>Initialization:</strong> Bluetooth setup and logging configuration</li>
+     *   <li><strong>Device Discovery:</strong> Scanning for available Anki vehicles</li>
+     *   <li><strong>Device Selection:</strong> User-guided vehicle selection</li>
+     *   <li><strong>Connection:</strong> Bluetooth connection establishment</li>
+     *   <li><strong>Vehicle Setup:</strong> Vehicle initialization and event listener configuration</li>
+     *   <li><strong>Interactive Mode:</strong> Menu-driven user interface</li>
+     *   <li><strong>Cleanup:</strong> Resource cleanup and log file closure</li>
+     * </ol>
+     *
+     * <p>The application provides comprehensive error handling at each stage
+     * with appropriate user feedback and graceful degradation.
+     *
+     * <p>The interactive menu system offers the following operations:
+     * <ul>
+     *   <li><strong>Status Check:</strong> Current vehicle state and statistics</li>
+     *   <li><strong>Speed Control:</strong> Direct speed setting with immediate feedback</li>
+     *   <li><strong>Lane Control:</strong> Precise lane positioning</li>
+     *   <li><strong>Track Mapping:</strong> Automated track discovery</li>
+     *   <li><strong>Control Demo:</strong> Predefined control sequence</li>
+     *   <li><strong>Special Tests:</strong> Advanced testing procedures</li>
+     *   <li><strong>Track Report:</strong> Detailed track analysis</li>
+     *   <li><strong>System Test:</strong> Notification system validation</li>
+     * </ul>
+     *
+     * <p>All user interactions and vehicle activities are logged to a timestamped
+     * file for detailed analysis and debugging.
+     *
+     * <h3>System Requirements:</h3>
+     * <ul>
+     *   <li>Java 22 or higher</li>
+     *   <li>Linux operating system with BlueZ</li>
+     *   <li>Bluetooth Low Energy adapter</li>
+     *   <li>Anki Overdrive vehicle and track</li>
+     * </ul>
+     *
+     * <h3>Usage:</h3>
+     * <pre>java de.pdbm.anki.example.AnkiControlExample</pre>
+     *
+     * @param args command line arguments (not used)
+     * @throws RuntimeException if critical initialization fails
+     */
     public static void main(String[] args) {
         System.out.println("===== Anki Overdrive Comprehensive Controller =====");
 
@@ -737,7 +1112,7 @@ public class AnkiControlExample {
         // Main menu
         boolean exit = false;
         while (!exit) {
-            System.out.println("\n=====  Anki Vehicle Controller =====");
+            System.out.println("\n===== 🚗 Anki Vehicle Controller =====");
             System.out.println("1:  Check Status");
             System.out.println("2:  Set Speed");
             System.out.println("3:  Change Lane");
@@ -746,7 +1121,7 @@ public class AnkiControlExample {
             System.out.println("6:  Special Tests");
             System.out.println("7:  Track Report");
             System.out.println("8:  Notification Test");
-            System.out.println("9:  Exit");
+            System.out.println("9: ❌ Exit");
             System.out.println(" Note: Vehicle activity is being logged to file");
 
             System.out.print("Choice: ");
@@ -765,8 +1140,8 @@ public class AnkiControlExample {
                     System.out.println("   Charger: " + (vehicle.isOnCharger() ? "✓ Yes" : "❌ No"));
                     System.out.println("   Speed: " + vehicle.getSpeed());
                     System.out.println("   Location: " + (currentLocation == -1 ? "Unknown" : currentLocation));
-                    System.out.println("  ️ Road Type: " + (currentRoadPiece == null ? "Unknown" : currentRoadPiece));
-                    System.out.println("  ️ Mapped Segments: " + trackMap.size());
+                    System.out.println("   Road Type: " + (currentRoadPiece == null ? "Unknown" : currentRoadPiece));
+                    System.out.println("   Mapped Segments: " + trackMap.size());
                     System.out.println("   Notifications: " + totalNotificationsReceived);
 
                     // Log status query
@@ -789,7 +1164,6 @@ public class AnkiControlExample {
 
                     try {
                         vehicle.setSpeed(speed);
-
                         writeToLog("Set speed: " + speed);
                         // Wait for user input
                         System.out.println("✓ Speed set: " + speed);
@@ -829,7 +1203,7 @@ public class AnkiControlExample {
                     writeToLog("Program normal exit");
                 }
                 default -> {
-                    System.out.println(" Invalid selection");
+                    System.out.println("❌ Invalid selection");
                     writeToLog("Invalid menu selection: " + cmd);
                 }
             }

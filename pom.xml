@@ -15,8 +15,6 @@
         <maven.compiler.target>22</maven.compiler.target>
     </properties>
 
-
-
     <dependencies>
         <dependency>
             <groupId>com.github.hypfvieh</groupId>
@@ -30,13 +28,11 @@
             <version>5.1.1</version>
         </dependency>
 
-
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>1.7.36</version>
         </dependency>
-
 
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -64,6 +60,28 @@
                 </configuration>
             </plugin>
 
+            <!-- JavaDoc Plugin Configuration -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.11.2</version>
+                <configuration>
+                    <doclint>none</doclint>
+                    <failOnError>false</failOnError>
+                    <failOnWarnings>false</failOnWarnings>
+                    <quiet>true</quiet>
+                    <show>public</show>
+                    <source>22</source>
+                    <encoding>UTF-8</encoding>
+                    <docencoding>UTF-8</docencoding>
+                    <charset>UTF-8</charset>
+                    <doctitle>Anki Overdrive Controller API</doctitle>
+                    <author>true</author>
+                    <version>true</version>
+                    <use>true</use>
+                    <splitindex>true</splitindex>
+                </configuration>
+            </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
