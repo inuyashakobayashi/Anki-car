@@ -155,10 +155,19 @@ public class Vehicle {
 	/**
 	 * Returns true, if and only if, the vehicle is connected.
 	 *
+	 * This method now checks the actual Bluetooth connection state
+	 * rather than relying solely on notification-based status updates.
+	 *
 	 * @return true, if vehicle is connected, otherwise false
 	 */
 	public boolean isConnected() {
-		return connected;
+		// 检查蓝牙设备是否连接且特性已初始化
+		boolean bluetoothConnected = bluetoothDevice != null && bluetoothDevice.getConnected();
+		boolean characteristicsReady = writeCharacteristic != null && readCharacteristic != null;
+
+		// 如果蓝牙连接且特性就绪，则认为已连接
+		// 这样可以避免依赖可能延迟的通知机制
+		return bluetoothConnected && characteristicsReady;
 	}
 
 

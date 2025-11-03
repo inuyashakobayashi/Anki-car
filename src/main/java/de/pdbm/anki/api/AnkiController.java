@@ -1,6 +1,7 @@
 package de.pdbm.anki.api;
 
 import de.pdbm.janki.RoadPiece;
+import de.pdbm.janki.Vehicle;
 import java.util.Map;
 import java.util.List;
 
@@ -123,4 +124,14 @@ public interface AnkiController {
      * Löscht die aktuell gespeicherte Streckenkarte.
      */
     void clearTrackMap();
+
+    /**
+     * Gibt das zugrunde liegende Vehicle-Objekt zurück.
+     *
+     * Ermöglicht direkten Zugriff auf erweiterte Funktionen wie
+     * Notification-Listener für Echtzeit-Positionsaktualisierungen.
+     *
+     * @return Das Vehicle-Objekt oder null wenn nicht verbunden
+     */
+    Vehicle getVehicle();
 }

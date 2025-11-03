@@ -671,19 +671,25 @@ public class AnkiControllerImpl implements AnkiController {
         currentLocation = update.getLocation();
         currentRoadPiece = update.getRoadPiece();
 
-        // Add to track map
-        trackMap.put(currentLocation, currentRoadPiece);
-
-        LOGGER.debug("Position update: location={}, roadPiece={}", currentLocation, currentRoadPiece);
-
-        // Notify listener if track mapping is active
+        // For track mapping, always notify listener - let the mapper decide if it's new
+        // This is critical for figure-8 tracks where same location IDs appear multiple times
         if (isTrackMapping && mappingListener != null) {
             try {
-                mappingListener.onTrackPieceDiscovered(currentLocation, currentRoadPiece);
+                // Always send position update first to update ascending state
                 mappingListener.onLocationUpdate(currentLocation, update.isAscendingLocations());
+
+                // Always send piece discovery - let SimpleTrackMapper decide if it's new
+                mappingListener.onTrackPieceDiscovered(currentLocation, currentRoadPiece);
             } catch (Exception e) {
                 LOGGER.error("Error notifying track mapping listener: {}", e.getMessage());
             }
+        }
+
+        // Keep track map for non-mapping purposes (maintain backward compatibility)
+        if (!trackMap.containsKey(currentLocation)) {
+            trackMap.put(currentLocation, currentRoadPiece);
+            LOGGER.debug("NEW track piece in map: location={}, roadPiece={}",
+                    currentLocation, currentRoadPiece);
         }
     }
 
@@ -730,5 +736,10 @@ public class AnkiControllerImpl implements AnkiController {
         vehicle = null;
 
         LOGGER.debug("Cleanup completed");
+    }
+
+    @Override
+    public Vehicle getVehicle() {
+        return vehicle;
     }
 }

@@ -11,11 +11,12 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>22</maven.compiler.source>
-        <maven.compiler.target>22</maven.compiler.target>
+        <maven.compiler.source>24</maven.compiler.source>
+        <maven.compiler.target>24</maven.compiler.target>
     </properties>
 
     <dependencies>
+        <!-- 你原有的依赖 -->
         <dependency>
             <groupId>com.github.hypfvieh</groupId>
             <artifactId>bluez-dbus</artifactId>
@@ -50,17 +51,48 @@
 
     <build>
         <plugins>
+            <!-- Maven Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <source>22</source>
-                    <target>22</target>
+                    <source>24</source>
+                    <target>24</target>
                 </configuration>
             </plugin>
 
-            <!-- JavaDoc Plugin Configuration -->
+            <!-- Exec Plugin - 最可靠的运行方式 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <!-- 启用本地访问，避免 Java 24 的警告 -->
+                    <arguments>
+                        <argument>--enable-native-access=javafx.graphics,ALL-UNNAMED</argument>
+                    </arguments>
+                </configuration>
+                <executions>
+                    <!-- 命令行版本 -->
+                    <execution>
+                        <id>console</id>
+                        <configuration>
+                            <mainClass>de.pdbm.anki.example.AnkiControlExample</mainClass>
+                        </configuration>
+                    </execution>
+
+                    <!-- GUI版本 -->
+                    <execution>
+                        <id>gui</id>
+                        <configuration>
+                            <mainClass>de.pdbm.anki.gui.SimpleAnkiControllerGUI</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- JavaDoc Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -71,7 +103,7 @@
                     <failOnWarnings>false</failOnWarnings>
                     <quiet>true</quiet>
                     <show>public</show>
-                    <source>22</source>
+                    <source>24</source>
                     <encoding>UTF-8</encoding>
                     <docencoding>UTF-8</docencoding>
                     <charset>UTF-8</charset>
@@ -83,6 +115,7 @@
                 </configuration>
             </plugin>
 
+            <!-- Maven Shade Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>

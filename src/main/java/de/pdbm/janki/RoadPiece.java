@@ -2,8 +2,8 @@ package de.pdbm.janki;
 
 
 /**
- * Enumeration to abstract from arbitray road piece IDs assigned by Anki. 
- * 
+ * Enumeration to abstract from arbitrary road piece IDs assigned by Anki.
+ *
  * @author bernd
  *
  */
