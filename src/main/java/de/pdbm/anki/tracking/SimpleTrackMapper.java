@@ -242,6 +242,14 @@ public class SimpleTrackMapper implements TrackMappingListener {
         RoadPiece normalizedRoadPiece = normalizeRoadPiece(roadPiece);
         RoadPiece normalizedLastRoadPiece = normalizeRoadPiece(lastRoadPiece);
 
+        // 特殊情况：START 和 FINISH 互相转换（如 FINISH→START 或 START→FINISH）
+        // 这种情况下它们是同一个物理片段的两个检测点，不应该被视为新片段
+        if (isStartFinishTransition(lastRoadPiece, roadPiece)) {
+            lastLocation = location;
+            lastRoadPiece = roadPiece;
+            return false;  // 还在同一个片段上
+        }
+
         // 不同类型的片段肯定是新的
         if (normalizedLastRoadPiece != normalizedRoadPiece) {
             lastRoadPiece = roadPiece;
@@ -253,8 +261,6 @@ public class SimpleTrackMapper implements TrackMappingListener {
         if (ascending) {
             if (lastLocation + 1 == location) {
                 lastLocation = location;
-                // 如果是从 START 到 FINISH，不更新 lastRoadPiece
-                // 这样可以避免重复添加
                 return false;  // 还在同一个片段上
             }
         } else {
@@ -267,6 +273,14 @@ public class SimpleTrackMapper implements TrackMappingListener {
         lastLocation = location;
         lastRoadPiece = roadPiece;
         return true;
+    }
+
+    /**
+     * 检查是否是 START 和 FINISH 之间的转换
+     */
+    private boolean isStartFinishTransition(RoadPiece piece1, RoadPiece piece2) {
+        return (piece1 == RoadPiece.START && piece2 == RoadPiece.FINISH) ||
+               (piece1 == RoadPiece.FINISH && piece2 == RoadPiece.START);
     }
 
     /**
