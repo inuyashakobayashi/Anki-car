@@ -10,16 +10,19 @@ import de.pdbm.janki.Vehicle;
  *
  */
 public final class PositionUpdate extends Notification {
-	
+
 	private final int location;
 
 	private final RoadPiece roadPiece;
 
+	private final int roadPieceId;
+
 	private final boolean ascendingLocations;
-	
-	public PositionUpdate(Vehicle vehicle, int location, RoadPiece roadPiece, boolean ascendingLocations) {
+
+	public PositionUpdate(Vehicle vehicle, int location, int roadPieceId, RoadPiece roadPiece, boolean ascendingLocations) {
 		super(vehicle);
 		this.location = location;
+		this.roadPieceId = roadPieceId;
 		this.roadPiece = roadPiece;
 		this.ascendingLocations = ascendingLocations;
 	}
@@ -41,12 +44,22 @@ public final class PositionUpdate extends Notification {
 	}
 
 	/**
-	 * Returns the road piece ID.
-	 * 
-	 * @return road piede ID
+	 * Returns the road piece type (enum).
+	 *
+	 * @return road piece type
 	 */
 	public RoadPiece getRoadPiece() {
 		return roadPiece;
+	}
+
+	/**
+	 * Returns the specific road piece ID (unique identifier).
+	 * This is the actual Anki road piece ID (e.g., 36, 39, 40 for different STRAIGHT pieces).
+	 *
+	 * @return road piece ID
+	 */
+	public int getRoadPieceId() {
+		return roadPieceId;
 	}
 
 	/**

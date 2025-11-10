@@ -15,9 +15,10 @@ public interface TrackMappingListener {
      * Wird aufgerufen, wenn ein neues Streckensegment entdeckt wird.
      *
      * @param locationId Eindeutige ID der Position auf der Strecke
+     * @param roadPieceId Spezifische Anki road piece ID (z.B. 36, 39, 40 für verschiedene STRAIGHT Teile)
      * @param roadPiece Typ des Streckensegments (Gerade, Kurve, Start, etc.)
      */
-    void onTrackPieceDiscovered(int locationId, RoadPiece roadPiece);
+    void onTrackPieceDiscovered(int locationId, int roadPieceId, RoadPiece roadPiece);
 
     /**
      * Wird bei jeder Positionsaktualisierung aufgerufen.

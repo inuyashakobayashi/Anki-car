@@ -5,6 +5,8 @@ import de.pdbm.anki.impl.AnkiControllerImpl;
 import de.pdbm.anki.gui.TrackMapVisualizer;
 import de.pdbm.anki.tracking.SimpleTrackMapper;
 import de.pdbm.anki.tracking.SimpleTrackMapper.TrackPiece;
+import de.pdbm.anki.tracking.TrackMapData;
+import de.pdbm.anki.tracking.TrackMapIO;
 import de.pdbm.janki.notifications.PositionUpdate;
 import de.pdbm.janki.notifications.PositionUpdateListener;
 import de.pdbm.janki.Vehicle;
@@ -25,9 +27,14 @@ import java.util.Scanner;
 public class TrackMappingWithGUI extends Application {
 
     private static final int MAPPING_SPEED = 350;
+    private static final int TRACKING_SPEED = 300;
+    private static final int TILE_SIZE = 150;  // Must match TrackMapVisualizer.TILE_SIZE
+
     private TrackMapVisualizer visualizer;
     private AnkiController controller;
     private SimpleTrackMapper mapper;
+    private TrackMapData trackMapData;
+    private boolean liveTrackingActive = false;
 
     public static void main(String[] args) {
         launch(args);
@@ -201,14 +208,45 @@ public class TrackMappingWithGUI extends Application {
             updateVisualizerStatus(String.format("✅ 完成！检测到 %d 个片段",
                     mapper.getTrackPieces().size()));
 
-            System.out.println("\n💡 GUI window is still open. Close it to exit.");
+            // 保存地图
+            try {
+                trackMapData = new TrackMapData(mapper.getTrackPieces());
+                trackMapData.printStats();
+                String savedPath = TrackMapIO.saveMap(trackMapData);
+                System.out.println("💾 Map saved to: " + savedPath);
+            } catch (Exception e) {
+                System.err.println("⚠️ Failed to save map: " + e.getMessage());
+            }
+
+            // 询问是否开始实时追踪
+            System.out.println("\n" + "=".repeat(80));
+            System.out.println("🚗 Live Tracking Mode");
+            System.out.println("=".repeat(80));
+            System.out.print("\nStart live tracking? (Y/n): ");
+
+            Scanner trackingScanner = new Scanner(System.in);
+            String response = "";
+            try {
+                response = trackingScanner.nextLine().trim().toLowerCase();
+            } catch (Exception e) {
+                System.err.println("⚠️ Failed to read input, defaulting to 'no'");
+                response = "n";
+            }
+
+            if (response.isEmpty() || response.equals("y") || response.equals("yes")) {
+                liveTrackingActive = true;
+                startLiveTracking();
+            } else {
+                System.out.println("\n💡 GUI window is still open. Close it to exit.");
+            }
 
         } catch (Exception e) {
             System.err.println("❌ Error: " + e.getMessage());
             e.printStackTrace();
             updateVisualizerStatus("❌ 错误：" + e.getMessage());
         } finally {
-            if (controller != null) {
+            // 如果在实时追踪模式，不要断开连接
+            if (!liveTrackingActive && controller != null) {
                 controller.disconnect();
                 System.out.println("\n👋 Disconnected. GUI window remains open.");
             }
@@ -222,60 +260,82 @@ public class TrackMappingWithGUI extends Application {
     }
 
     /**
-     * 处理小车位置更新
+     * 启动实时追踪模式
      */
-    private void handlePositionUpdate(PositionUpdate update) {
+    private void startLiveTracking() {
+        if (trackMapData == null) {
+            System.err.println("❌ No map data available for tracking!");
+            return;
+        }
+
+        System.out.println("\n🚗 Starting live tracking mode...");
+        System.out.println("   Speed: " + TRACKING_SPEED);
+        System.out.println("   Press Ctrl+C to stop\n");
+
+        updateVisualizerStatus("🚗 实时追踪模式");
+
+        // 启用小车显示
+        visualizer.enableVehicleDisplay();
+
+        // 注册位置更新监听器
+        Vehicle vehicle = controller.getVehicle();
+        if (vehicle != null) {
+            vehicle.addNotificationListener(new PositionUpdateListener() {
+                @Override
+                public void onPositionUpdate(PositionUpdate update) {
+                    handleLivePositionUpdate(update);
+                }
+            });
+        }
+
+        // 启动小车
+        controller.setSpeed(TRACKING_SPEED);
+        System.out.println("✓ Live tracking started!");
+        System.out.println("   Vehicle is now being tracked in real-time");
+        System.out.println("   Press Ctrl+C or close the GUI window to stop\n");
+    }
+
+    /**
+     * 处理实时位置更新（使用 locationId + roadPieceId 精确定位）
+     */
+    private void handleLivePositionUpdate(PositionUpdate update) {
         int locationId = update.getLocation();
+        int roadPieceId = update.getRoadPieceId();
+        de.pdbm.janki.RoadPiece roadPieceType = update.getRoadPiece();
 
-        // 先尝试从已映射的轨道片段中查找
-        TrackPiece piece = findTrackPieceByLocation(locationId);
+        // 使用 (locationId, roadPieceId) 精确组合查找对应的 piece
+        TrackMapData.PieceLocationInfo info = trackMapData.findPieceByLocationAndId(locationId, roadPieceId);
 
-        if (piece != null) {
-            // 找到对应的轨道片段，更新小车位置
-            updateVehicleOnTrack(piece, update);
-        }
-    }
+        if (info != null) {
+            TrackPiece piece = info.piece;
 
-    /**
-     * 根据 locationId 查找对应的轨道片段
-     */
-    private TrackPiece findTrackPieceByLocation(int locationId) {
-        // 由于一个轨道片段可能包含多个location ID
-        // 我们简化处理：直接找第一个匹配的片段
-        // 这个方法可能需要根据实际情况优化
+            // 计算屏幕坐标（简单版：显示在piece中心）
+            List<TrackPiece> pieces = trackMapData.getPieces();
+            int minX = pieces.stream().mapToInt(p -> p.x).min().orElse(0);
+            int maxY = pieces.stream().mapToInt(p -> p.y).max().orElse(0);
 
-        List<TrackPiece> pieces = mapper.getTrackPieces();
-        if (pieces.isEmpty()) {
-            return null;
-        }
+            // 标准化坐标
+            int normalizedX = piece.x - minX;
+            int normalizedY = maxY - piece.y;
 
-        // 简化方案：根据location ID的范围估算对应哪个片段
-        // 这里我们假设每个片段大约有4-6个location
-        int pieceIndex = Math.min(locationId / 5, pieces.size() - 1);
-        return pieces.get(pieceIndex);
-    }
+            // 转换为屏幕坐标（tile中心）
+            double screenX = normalizedX * TILE_SIZE + TILE_SIZE / 2.0;
+            double screenY = normalizedY * TILE_SIZE + TILE_SIZE / 2.0;
 
-    /**
-     * 在轨道上更新小车位置
-     */
-    private void updateVehicleOnTrack(TrackPiece piece, PositionUpdate update) {
-        // 计算屏幕坐标
-        List<TrackPiece> pieces = mapper.getTrackPieces();
+            // 更新小车位置
+            visualizer.updateVehiclePosition(screenX, screenY);
 
-        int minX = pieces.stream().mapToInt(p -> p.x).min().orElse(0);
-        int maxY = pieces.stream().mapToInt(p -> p.y).max().orElse(0);
+            // 更新小车方向
+            if (piece.exitDirection != null) {
+                visualizer.updateVehicleDirection(piece.exitDirection);
+            }
 
-        // 标准化坐标（与TrackMapVisualizer中的渲染逻辑一致）
-        int normalizedX = piece.x - minX;
-        int normalizedY = maxY - piece.y;
-
-        double screenX = normalizedX * 150;  // TILE_SIZE = 150
-        double screenY = normalizedY * 150;
-
-        // 更新小车位置和方向
-        visualizer.updateVehiclePosition(screenX, screenY);
-        if (piece.exitDirection != null) {
-            visualizer.updateVehicleDirection(piece.exitDirection);
+            // 打印调试信息
+            System.out.printf("📍 Loc: %d, ID: %d, Type: %s, Piece: (%d,%d), Screen: (%.0f,%.0f), Progress: %.2f\n",
+                             locationId, piece.roadPieceId, roadPieceType, piece.x, piece.y, screenX, screenY, info.progress);
+        } else {
+            // 如果找不到对应的 piece，打印警告
+            System.out.printf("⚠️ Location %d + ID:%d (%s) not found in map!\n", locationId, roadPieceId, roadPieceType);
         }
     }
 

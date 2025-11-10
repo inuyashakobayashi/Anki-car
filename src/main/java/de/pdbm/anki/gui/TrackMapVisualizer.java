@@ -145,8 +145,8 @@ public class TrackMapVisualizer {
         imageView.setLayoutY(screenY);
 
         // 添加调试信息
-        System.out.printf("  Rendering: %s at grid(%d,%d) -> screen(%.0f,%.0f), rotation=%.0f°\n",
-                piece.roadPiece, piece.x, piece.y, screenX, screenY, rotation);
+        System.out.printf("  Rendering: %s (ID:%d) at grid(%d,%d) -> screen(%.0f,%.0f), rotation=%.0f°\n",
+                piece.roadPiece, piece.roadPieceId, piece.x, piece.y, screenX, screenY, rotation);
 
         trackPane.getChildren().add(imageView);
         pieceViews.put(piece.x + "," + piece.y, imageView);
@@ -409,6 +409,17 @@ public class TrackMapVisualizer {
     }
 
     /**
+     * 启用小车显示（在实时追踪开始时调用）
+     */
+    public void enableVehicleDisplay() {
+        Platform.runLater(() -> {
+            if (vehicleView == null) {
+                initializeVehicle();
+            }
+        });
+    }
+
+    /**
      * 初始化小车图标
      */
     private void initializeVehicle() {
@@ -447,9 +458,10 @@ public class TrackMapVisualizer {
         }
 
         Platform.runLater(() -> {
-            // 居中显示（因为layoutX/layoutY是左上角坐标）
-            double centerX = screenX + (TILE_SIZE - CAR_SIZE) / 2.0;
-            double centerY = screenY + (TILE_SIZE - CAR_SIZE) / 2.0;
+            // screenX/screenY 已经是tile中心坐标
+            // 我们需要减去小车图标的一半，使小车中心对齐到这个点
+            double centerX = screenX - CAR_SIZE / 2.0;
+            double centerY = screenY - CAR_SIZE / 2.0;
 
             vehicleView.setLayoutX(centerX);
             vehicleView.setLayoutY(centerY);

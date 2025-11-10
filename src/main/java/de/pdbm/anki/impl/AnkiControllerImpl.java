@@ -679,7 +679,7 @@ public class AnkiControllerImpl implements AnkiController {
                 mappingListener.onLocationUpdate(currentLocation, update.isAscendingLocations());
 
                 // Always send piece discovery - let SimpleTrackMapper decide if it's new
-                mappingListener.onTrackPieceDiscovered(currentLocation, currentRoadPiece);
+                mappingListener.onTrackPieceDiscovered(currentLocation, update.getRoadPieceId(), currentRoadPiece);
             } catch (Exception e) {
                 LOGGER.error("Error notifying track mapping listener: {}", e.getMessage());
             }

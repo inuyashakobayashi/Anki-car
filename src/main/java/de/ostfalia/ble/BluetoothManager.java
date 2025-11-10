@@ -157,19 +157,36 @@ public class BluetoothManager {
     private List<com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice> performDeviceDiscovery(
             com.github.hypfvieh.bluetooth.wrapper.BluetoothAdapter adapter) throws InterruptedException {
 
-        // Zunächst bereits bekannte Geräte abrufen
-        List<com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice> devices =
-                deviceManager.scanForBluetoothDevices(adapter.getAddress(), 1000);
+        boolean discoveryWasStartedByUs = false;
+        List<com.github.hypfvieh.bluetooth.wrapper.BluetoothDevice> devices = new ArrayList<>();
 
-        // Falls keine Geräte gefunden wurden, aktive Erkennung starten
-        if (devices.isEmpty()) {
-            LOGGER.debug("Starte aktive Geräteerkennung...");
+        try {
+            // Check if discovery is already running
+            boolean isDiscovering = adapter.isDiscovering();
 
-            adapter.startDiscovery();
-            Thread.sleep(5000); // Erkennungszeit
-            adapter.stopDiscovery();
+            if (!isDiscovering) {
+                LOGGER.debug("Starte aktive Geräteerkennung...");
+                adapter.startDiscovery();
+                discoveryWasStartedByUs = true;
+                Thread.sleep(5000); // Erkennungszeit
+            } else {
+                LOGGER.debug("Bluetooth-Erkennung läuft bereits, warte auf Geräte...");
+                Thread.sleep(2000); // Kurze Wartezeit für laufende Erkennung
+            }
 
+            // Geräte abrufen
             devices = deviceManager.scanForBluetoothDevices(adapter.getAddress(), 5000);
+
+        } finally {
+            // Only stop discovery if we started it
+            if (discoveryWasStartedByUs) {
+                try {
+                    adapter.stopDiscovery();
+                    LOGGER.debug("Geräteerkennung gestoppt");
+                } catch (Exception e) {
+                    LOGGER.warn("Fehler beim Stoppen der Geräteerkennung: {}", e.getMessage());
+                }
+            }
         }
 
         return devices;

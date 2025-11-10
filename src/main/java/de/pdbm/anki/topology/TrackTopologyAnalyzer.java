@@ -59,8 +59,8 @@ public class TrackTopologyAnalyzer implements TrackMappingListener {
     }
 
     @Override
-    public void onTrackPieceDiscovered(int locationId, RoadPiece roadPiece) {
-        LOGGER.info("Discovered: location={}, type={}", locationId, roadPiece);
+    public void onTrackPieceDiscovered(int locationId, int roadPieceId, RoadPiece roadPiece) {
+        LOGGER.info("Discovered: location={}, roadPieceId={}, type={}", locationId, roadPieceId, roadPiece);
         topology.addNode(locationId, roadPiece);
     }
 

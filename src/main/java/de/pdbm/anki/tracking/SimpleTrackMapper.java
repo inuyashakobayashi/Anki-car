@@ -26,6 +26,7 @@ public class SimpleTrackMapper implements TrackMappingListener {
     private final Deque<TrackPiece> trackPieces;
     private VehiclePosition oldPosition;
     private RoadPiece lastRoadPiece = null;
+    private int lastRoadPieceId = -1;
     private int lastLocation = -1;
     private boolean isAscending = true;
 
@@ -72,13 +73,19 @@ public class SimpleTrackMapper implements TrackMappingListener {
         public final int x;
         public final int y;
         public final RoadPiece roadPiece;
+        public final int roadPieceId;  // 具体的 Anki road piece ID (36, 39, 40, etc.)
         public final char asciiChar;
         public final Direction enterDirection; // 进入此片段的方向
         public final Direction exitDirection;  // 离开此片段的方向
 
-        public TrackPiece(int x, int y, RoadPiece roadPiece, char asciiChar, Direction enterDirection, Direction exitDirection) {
+        // Location tracking for live tracking mode
+        public int startLocation = -1;  // 这个片段的起始 locationId
+        public int endLocation = -1;    // 这个片段的结束 locationId
+
+        public TrackPiece(int x, int y, int roadPieceId, RoadPiece roadPiece, char asciiChar, Direction enterDirection, Direction exitDirection) {
             this.x = x;
             this.y = y;
+            this.roadPieceId = roadPieceId;
             this.roadPiece = roadPiece;
             this.asciiChar = asciiChar;
             this.enterDirection = enterDirection;
@@ -86,12 +93,26 @@ public class SimpleTrackMapper implements TrackMappingListener {
         }
 
         public TrackPiece shift(int dx, int dy) {
-            return new TrackPiece(this.x + dx, this.y + dy, this.roadPiece, this.asciiChar, this.enterDirection, this.exitDirection);
+            TrackPiece shifted = new TrackPiece(this.x + dx, this.y + dy, this.roadPieceId, this.roadPiece, this.asciiChar, this.enterDirection, this.exitDirection);
+            shifted.startLocation = this.startLocation;
+            shifted.endLocation = this.endLocation;
+            return shifted;
+        }
+
+        /**
+         * 计算某个 locationId 在这个片段内的进度 (0.0 - 1.0)
+         */
+        public double getProgress(int locationId) {
+            if (startLocation == -1 || endLocation == -1 || endLocation == startLocation) {
+                return 0.5;  // 如果没有location信息，返回中点
+            }
+            double progress = (locationId - startLocation) / (double)(endLocation - startLocation);
+            return Math.max(0.0, Math.min(1.0, progress));
         }
 
         @Override
         public String toString() {
-            return String.format("(%d,%d) %s [%c]", x, y, roadPiece, asciiChar);
+            return String.format("(%d,%d) %s (ID:%d) [%c]", x, y, roadPiece, roadPieceId, asciiChar);
         }
     }
 
@@ -139,35 +160,48 @@ public class SimpleTrackMapper implements TrackMappingListener {
      * TrackMappingListener 实现 - 当发现新轨道片段时
      */
     @Override
-    public void onTrackPieceDiscovered(int location, RoadPiece roadPiece) {
+    public void onTrackPieceDiscovered(int location, int roadPieceId, RoadPiece roadPiece) {
         if (!gathering) return;
 
+        // 总是尝试更新当前片段的 endLocation（无论是否是新片段）
+        // 这确保我们捕获所有经过的 location
+        if (!trackPieces.isEmpty()) {
+            TrackPiece currentPiece = trackPieces.getLast();
+            currentPiece.endLocation = location;
+        }
+
         // 检查是否是新片段
-        if (!isNewRoadPiece(location, roadPiece, isAscending)) {
+        if (!isNewRoadPiece(location, roadPieceId, roadPiece, isAscending)) {
             return;
         }
 
-        System.out.printf("📍 New piece: Loc=%d, Type=%s, Ascending=%s\n",
-                location, roadPiece, isAscending);
+        System.out.printf("📍 New piece: Loc=%d, ID=%d, Type=%s, Ascending=%s\n",
+                location, roadPieceId, roadPiece, isAscending);
 
         // 第一个片段 - 初始化
         if (trackPieces.isEmpty()) {
             char c = getAsciiChar(roadPiece, Direction.POSITIVE_X, false);
-            oldPosition = new VehiclePosition(X_START, Y_START, Direction.POSITIVE_X);
+            Direction enterDirection = Direction.POSITIVE_X;
+            Direction exitDirection = Direction.POSITIVE_X;
 
-            // 如果第一个是CORNER，需要根据ascending判断初始方向
+            // 如果第一个是CORNER，需要根据ascending判断初始方向和转向
             if (roadPiece == RoadPiece.CORNER) {
                 if (isAscending) {
                     c = '/';
-                    oldPosition = new VehiclePosition(X_START, Y_START, Direction.POSITIVE_Y);
+                    enterDirection = Direction.POSITIVE_Y;
+                    exitDirection = Direction.POSITIVE_Y.decrement(); // 左转
                 } else {
                     c = '\\';
-                    oldPosition = new VehiclePosition(X_START, Y_START, Direction.NEGATIVE_Y);
+                    enterDirection = Direction.NEGATIVE_Y;
+                    exitDirection = Direction.NEGATIVE_Y.increment(); // 右转
                 }
             }
 
-            // 第一个片段的exit方向暂时设为与enter相同
-            TrackPiece piece = new TrackPiece(oldPosition.x, oldPosition.y, roadPiece, c, oldPosition.direction, oldPosition.direction);
+            oldPosition = new VehiclePosition(X_START, Y_START, exitDirection);
+
+            TrackPiece piece = new TrackPiece(oldPosition.x, oldPosition.y, roadPieceId, roadPiece, c, enterDirection, exitDirection);
+            piece.startLocation = location;  // 记录起始 location
+            piece.endLocation = location;    // 初始化 endLocation
             trackPieces.addLast(piece);
             System.out.println("  ✓ First piece: " + piece);
 
@@ -208,7 +242,9 @@ public class SimpleTrackMapper implements TrackMappingListener {
         // 添加新片段
         char c = getAsciiChar(roadPiece, oldPosition.direction, isAscending);
         // 使用 oldPosition.direction 作为进入方向，newPosition.direction 作为离开方向
-        TrackPiece piece = new TrackPiece(newPosition.x, newPosition.y, roadPiece, c, oldPosition.direction, newPosition.direction);
+        TrackPiece piece = new TrackPiece(newPosition.x, newPosition.y, roadPieceId, roadPiece, c, oldPosition.direction, newPosition.direction);
+        piece.startLocation = location;  // 记录起始 location
+        piece.endLocation = location;    // 初始化 endLocation
         trackPieces.addLast(piece);
         System.out.println("  ✓ Added: " + piece + " (enter from: " + oldPosition.direction + ", exit to: " + newPosition.direction + ")");
 
@@ -230,68 +266,88 @@ public class SimpleTrackMapper implements TrackMappingListener {
 
     /**
      * 检查是否是新的轨道片段
+     * 使用 roadPieceId 进行更精确的检测
      */
-    private boolean isNewRoadPiece(int location, RoadPiece roadPiece, boolean ascending) {
+    private boolean isNewRoadPiece(int location, int roadPieceId, RoadPiece roadPiece, boolean ascending) {
         if (lastRoadPiece == null) {
             lastRoadPiece = roadPiece;
+            lastRoadPieceId = roadPieceId;
             lastLocation = location;
             return true;
         }
 
-        // START 和 FINISH 是同一个 straight 片段的两个检测点，应视为同一类型
-        RoadPiece normalizedRoadPiece = normalizeRoadPiece(roadPiece);
-        RoadPiece normalizedLastRoadPiece = normalizeRoadPiece(lastRoadPiece);
-
-        // 特殊情况：START 和 FINISH 互相转换（如 FINISH→START 或 START→FINISH）
-        // 这种情况下它们是同一个物理片段的两个检测点，不应该被视为新片段
-        if (isStartFinishTransition(lastRoadPiece, roadPiece)) {
+        // 检查是否是 START/FINISH 之间的转换（同一个片段的两个检测点）
+        if (isStartFinishTransition(lastRoadPieceId, roadPieceId)) {
             lastLocation = location;
             lastRoadPiece = roadPiece;
+            lastRoadPieceId = roadPieceId;
+            updateCurrentPieceEndLocation(location);
             return false;  // 还在同一个片段上
         }
 
-        // 不同类型的片段肯定是新的
-        if (normalizedLastRoadPiece != normalizedRoadPiece) {
+        // 标准化 roadPieceId：START(33) 和 FINISH(34) 视为相同
+        int normalizedCurrentId = normalizeRoadPieceId(roadPieceId);
+        int normalizedLastId = normalizeRoadPieceId(lastRoadPieceId);
+
+        // 如果标准化后的 roadPieceId 不同，肯定是新片段
+        // 这解决了同类型但不同物理片段的问题（如两个不同的 STRAIGHT 片段）
+        if (normalizedLastId != normalizedCurrentId) {
             lastRoadPiece = roadPiece;
+            lastRoadPieceId = roadPieceId;
             lastLocation = location;
             return true;
         }
 
-        // 同类型片段，检查location是否连续
+        // 相同的 roadPieceId，检查 location 是否连续
+        // 如果连续，说明还在同一个物理片段上
         if (ascending) {
             if (lastLocation + 1 == location) {
                 lastLocation = location;
+                updateCurrentPieceEndLocation(location);  // 更新当前片段的 endLocation
                 return false;  // 还在同一个片段上
             }
         } else {
             if (lastLocation - 1 == location) {
                 lastLocation = location;
+                updateCurrentPieceEndLocation(location);  // 更新当前片段的 endLocation
                 return false;  // 还在同一个片段上
             }
         }
 
+        // location 不连续，可能是新片段
         lastLocation = location;
         lastRoadPiece = roadPiece;
+        lastRoadPieceId = roadPieceId;
         return true;
+    }
+
+    /**
+     * 更新当前片段的 endLocation
+     */
+    private void updateCurrentPieceEndLocation(int location) {
+        if (!trackPieces.isEmpty()) {
+            TrackPiece currentPiece = trackPieces.getLast();
+            currentPiece.endLocation = location;
+        }
     }
 
     /**
      * 检查是否是 START 和 FINISH 之间的转换
      */
-    private boolean isStartFinishTransition(RoadPiece piece1, RoadPiece piece2) {
-        return (piece1 == RoadPiece.START && piece2 == RoadPiece.FINISH) ||
-               (piece1 == RoadPiece.FINISH && piece2 == RoadPiece.START);
+    private boolean isStartFinishTransition(int id1, int id2) {
+        return (id1 == 33 && id2 == 34) || (id1 == 34 && id2 == 33);
     }
 
     /**
-     * 将 START 和 FINISH 标准化为 STRAIGHT
-     * 因为它们实际上是同一个 straight 片段的两个检测点
+     * 标准化 roadPieceId：START(33) 和 FINISH(34) 统一为 33
+     * 因为它们是同一个物理轨道片段的两个检测点
      */
-    private RoadPiece normalizeRoadPiece(RoadPiece roadPiece) {
-        if (roadPiece == RoadPiece.START || roadPiece == RoadPiece.FINISH) {
-            return RoadPiece.STRAIGHT;
+    private int normalizeRoadPieceId(int roadPieceId) {
+        // START=33, FINISH=34
+        if (roadPieceId == 33 || roadPieceId == 34) {
+            return 33;  // 统一使用 START 的 ID
         }
-        return roadPiece;
+        return roadPieceId;
     }
 
     /**

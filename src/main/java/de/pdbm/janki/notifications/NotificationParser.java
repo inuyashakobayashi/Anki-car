@@ -97,8 +97,9 @@ public class NotificationParser {
 			 * enthält immer identische Werte, nämlich 16 -65 31 73 
 			 */
 			
-			RoadPiece roadPiece = RoadPiece.valueOf(bytes[3]);
-			return new PositionUpdate(vehicle, bytes[2], roadPiece, ! ((bytes[10] & 0x40) == 0x40));
+			int roadPieceId = bytes[3] & 0xFF; // Convert signed byte to unsigned int
+			RoadPiece roadPiece = RoadPiece.valueOf(roadPieceId);
+			return new PositionUpdate(vehicle, bytes[2], roadPieceId, roadPiece, ! ((bytes[10] & 0x40) == 0x40));
 		}
 
 		/*
