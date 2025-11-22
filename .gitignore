@@ -36,3 +36,19 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# Claude 相关文件
+.claude/
+
+# Anki 日志文件
+anki_log_*.txt
+
+# Maven 生成的文件
+dependency-reduced-pom.xml
+
+# Maps 目录
+maps/
+
+# 图片文件 (根据需要选择以下之一)
+src/main/resources/images/
+# 或者忽略整个 images 目录: src/main/resources/images/
