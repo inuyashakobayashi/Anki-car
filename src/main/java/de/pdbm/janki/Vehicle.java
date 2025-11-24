@@ -346,6 +346,45 @@ public class Vehicle {
         sendWrite(Message.turnMessage(Message.TURN_UTURN_JUMP, Message.TRIGGER_IMMEDIATE));
     }
 
+    // --- 新增车灯控制方法 ---
+
+    // 开关特定的灯
+    public void setLight(byte lightId, boolean on) {
+        String name = switch(lightId) {
+            case Message.LIGHT_HEADLIGHTS -> "前大灯";
+            case Message.LIGHT_BRAKELIGHTS -> "刹车灯";
+            case Message.LIGHT_FRONTLIGHTS -> "信号灯";
+            case Message.LIGHT_ENGINE -> "引擎灯";
+            default -> "未知灯";
+        };
+        System.out.println("💡 设置 " + name + ": " + (on ? "开" : "关"));
+        sendWrite(Message.setLightsMessage(lightId, on));
+    }
+
+    // 全开/全关
+    public void toggleAllLights(boolean on) {
+        System.out.println("💡 " + (on ? "开启" : "关闭") + "所有车灯");
+        sendWrite(Message.setAllLightsMessage(on));
+    }
+
+    // 闪烁大灯 (演示用)
+// 修改后的 flashHeadlights 方法（去掉了 Thread）
+    public void flashHeadlights() {
+        try {
+            System.out.println("✨ 开始闪烁大灯...");
+            for (int i = 0; i < 3; i++) {
+                setLight(Message.LIGHT_HEADLIGHTS, true);
+                Thread.sleep(200); // 亮 200ms
+                setLight(Message.LIGHT_HEADLIGHTS, false);
+                Thread.sleep(200); // 灭 200ms
+            }
+            // 闪烁结束后，保持开启状态
+            setLight(Message.LIGHT_HEADLIGHTS, true);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private static class AnkiBle {
 
         private static final String ANKI_SERVICE_UUID = "BE15BEEF-6186-407E-8381-0BD89C4D8DF4";

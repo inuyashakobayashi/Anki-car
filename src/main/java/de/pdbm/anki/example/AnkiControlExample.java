@@ -126,6 +126,7 @@ public class AnkiControlExample {
             System.out.println("3: Stop (0)");
             System.out.println("4: Change Lane");
             System.out.println("5: unturn car");
+            System.out.println("6: light test");
             System.out.println("8: battery level check");
             System.out.println("9: Exit");
 
@@ -155,6 +156,36 @@ public class AnkiControlExample {
                         try { Thread.sleep(1500); } catch (Exception e) {}
                     }
                     vehicle.uTurn();
+                }
+
+                case 6 -> {
+                    System.out.println("💡 车灯测试开始...");
+
+                    // 1. 开启所有灯 (包括了 Headlights 和 Frontlights)
+                    vehicle.toggleAllLights(true);
+                    try { Thread.sleep(1000); } catch (Exception e) {}
+
+                    // 2. 闪烁大灯 (同步执行)
+                    vehicle.flashHeadlights();
+
+                    // 3. 停顿欣赏
+                    try { Thread.sleep(1000); } catch (Exception e) {}
+
+                    // 4. 依次关闭 (补上漏掉的 FRONTLIGHTS)
+                    System.out.println("依次关闭...");
+
+                    vehicle.setLight(Message.LIGHT_HEADLIGHTS, false); // 关大灯
+                    try { Thread.sleep(500); } catch (Exception e) {}
+
+                    vehicle.setLight(Message.LIGHT_FRONTLIGHTS, false); // 关前辅助灯 (新增!)
+                    try { Thread.sleep(500); } catch (Exception e) {}
+
+                    vehicle.setLight(Message.LIGHT_BRAKELIGHTS, false); // 关刹车灯
+                    try { Thread.sleep(500); } catch (Exception e) {}
+
+                    vehicle.setLight(Message.LIGHT_ENGINE, false);      // 关引擎灯
+
+                    System.out.println("车灯测试结束");
                 }
                 case 9 -> {
                     vehicle.setSpeed(0);

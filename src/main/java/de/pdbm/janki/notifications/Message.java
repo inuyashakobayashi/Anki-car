@@ -38,6 +38,44 @@ public class Message {
     public static final byte TRIGGER_IMMEDIATE = 0;    // 立即执行
     public static final byte TRIGGER_INTERSECTION = 1; // 在路口执行
 
+    // --- 车灯相关常量 ---
+    private static final byte SET_LIGHTS = 0x1d; // 29
+
+    // 灯光通道定义
+    public static final byte LIGHT_HEADLIGHTS  = 0; // 前大灯
+    public static final byte LIGHT_BRAKELIGHTS = 1; // 刹车灯
+    public static final byte LIGHT_FRONTLIGHTS = 2; // 前信号灯
+    public static final byte LIGHT_ENGINE      = 3; // 引擎灯
+
+    /**
+     * 构建车灯控制指令
+     * * Anki 的灯光掩码逻辑：
+     * 低4位 (0-3) 表示“是否修改该灯” (Valid 位)
+     * 高4位 (4-7) 表示“该灯的新状态” (1=开, 0=关)
+     * * @param lightId 灯的ID (0-3)
+     * @param on true=开, false=关
+     */
+    public static byte[] setLightsMessage(byte lightId, boolean on) {
+        // 构造掩码
+        int validBit = 1 << lightId;           // 比如前灯是 0001
+        int valueBit = (on ? 1 : 0) << (lightId + 4); // 前灯开是 0001 0000
+
+        // 组合起来
+        byte mask = (byte) (validBit | valueBit);
+
+        // 格式: { 长度(2), ID(0x1d), 掩码 }
+        return new byte[] { 2, SET_LIGHTS, mask };
+    }
+
+    /**
+     * 一次性控制所有灯
+     */
+    public static byte[] setAllLightsMessage(boolean on) {
+        // Valid: 1111 (0x0F) - 修改所有灯
+        // Value: 1111 (0xF0) 或 0000 (0x00)
+        byte mask = (byte) (0x0F | (on ? 0xF0 : 0x00));
+        return new byte[] { 2, SET_LIGHTS, mask };
+    }
     /**
      * 构建掉头指令
      * 结构: { 长度(3), ID(0x32), 类型, 触发时机 }
