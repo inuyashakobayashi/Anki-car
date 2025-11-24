@@ -73,7 +73,7 @@ public class VehicleDashboard extends VBox {
                 .text("Connected")
                 .description(getVehicleMacSafe())
                 .textAlignment(TextAlignment.CENTER)
-                .prefSize(145, 100) // 稍微调小一点以适应并排
+                .prefSize(180, 120) // 稍微调小一点以适应并排
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
@@ -83,7 +83,7 @@ public class VehicleDashboard extends VBox {
                 .title("Battery")
                 .unit("mV")
                 .maxValue(4200) // 满电电压约 4.2V
-                .prefSize(145, 100)
+                .prefSize(180, 120)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
@@ -94,7 +94,7 @@ public class VehicleDashboard extends VBox {
                 .unit("mm/s")
                 .maxValue(1000)
                 .threshold(800)
-                .prefSize(145, 145)
+                .prefSize(180, 180)
                 .backgroundColor(Color.web("#222"))
                 .build();
 
@@ -106,7 +106,7 @@ public class VehicleDashboard extends VBox {
                 .unit("mm/s")
                 .maxValue(1000)
                 .value(0)
-                .prefSize(145, 145)
+                .prefSize(180, 180)
                 .backgroundColor(Color.web("#222"))
                 .barColor(Color.web("#3498db")) // 蓝色进度条
                 .build();
@@ -126,7 +126,7 @@ public class VehicleDashboard extends VBox {
         headLightTile = TileBuilder.create()
                 .skinType(Tile.SkinType.SWITCH)
                 .title("Headlights")
-                .prefSize(145, 100)
+                .prefSize(180, 120)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
@@ -143,7 +143,7 @@ public class VehicleDashboard extends VBox {
         tailLightTile = TileBuilder.create()
                 .skinType(Tile.SkinType.SWITCH)
                 .title("Taillights")
-                .prefSize(145, 100)
+                .prefSize(180, 120)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
@@ -196,16 +196,16 @@ public class VehicleDashboard extends VBox {
                 .skinType(Tile.SkinType.CUSTOM)
                 .title("Control Pad")
                 .graphic(btnGrid)
-                .prefSize(300, 200) // 宽度占满
+                .prefSize(370, 250) // 宽度占满
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
     }
 
     private Button createStyledButton(String text, String color) {
         Button btn = new Button(text);
-        btn.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12px;");
-        btn.setPrefWidth(135); // 按钮宽度适配
-        btn.setPrefHeight(30);
+        btn.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 16px;");
+        btn.setPrefWidth(165); // 按钮宽度适配
+        btn.setPrefHeight(40);
         return btn;
     }
 

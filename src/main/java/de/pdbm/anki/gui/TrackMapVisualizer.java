@@ -21,8 +21,8 @@ import java.util.Map;
  */
 public class TrackMapVisualizer {
 
-    private static final int TILE_SIZE = 150; // 需与 TrackMappingWithGUI 中的一致
-    private static final int CAR_SIZE = 60;   // 小车图标大小
+    private static final int TILE_SIZE = 250; // 需与 TrackMappingWithGUI 中的一致
+    private static final int CAR_SIZE = 100;   // 小车图标大小
 
     private final Pane trackPane;
 
