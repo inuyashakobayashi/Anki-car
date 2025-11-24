@@ -125,7 +125,9 @@ public class AnkiControlExample {
             System.out.println("2: Set Speed (300)");
             System.out.println("3: Stop (0)");
             System.out.println("4: Change Lane");
+            System.out.println("8: battery level check");
             System.out.println("9: Exit");
+
             System.out.print("Choice: ");
 
             int cmd = scanner.nextInt();
@@ -148,6 +150,9 @@ public class AnkiControlExample {
                     vehicle.setSpeed(0);
                     vehicle.disconnect();
                     exit = true;
+                }
+                case 8 -> {
+                    vehicle.queryBatteryLevel();
                 }
                 default -> System.out.println("Invalid command");
             }

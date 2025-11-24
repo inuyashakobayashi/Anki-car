@@ -313,6 +313,26 @@ public class Vehicle {
         str.codePoints().filter(Character::isUpperCase).forEach(sb::appendCodePoint);
         return sb.toString();
     }
+    // --- 新增通用发送方法 (放在类里任何位置都可以) ---
+    private void sendWrite(byte[] message) {
+        // 检查连接状态
+        if (Boolean.TRUE.equals(bluetoothDevice.isConnected()) && writeCharacteristic != null) {
+            try {
+                // 发送指令 (第二个参数传 null)
+                writeCharacteristic.writeValue(message, null);
+            } catch (Exception e) {
+                System.err.println("指令发送失败: " + e.getMessage());
+            }
+        } else {
+            System.out.println("❌ 未连接或写特征未就绪，无法发送指令");
+        }
+    }
+
+    // --- 新增查询电量方法 ---
+    public void queryBatteryLevel() {
+        System.out.println("正在查询电池电量...");
+        sendWrite(Message.batteryLevelRequest());
+    }
 
     private static class AnkiBle {
 

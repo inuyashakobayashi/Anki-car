@@ -25,7 +25,14 @@ public class Message {
 	private static final byte SET_OFFSET_FROM_ROAD_CENTER = 0x2c;
 	private static final byte DISCONNECT = 0x0d;
 
+    // 1. 定义指令 ID (参考 protocol.h)
+    private static final byte BATTERY_LEVEL_REQUEST = 0x1a;
 
+    // 2. 添加这个静态方法，用来生成“查询电量”的指令数据
+    public static byte[] batteryLevelRequest() {
+        // 格式: { 长度, ID }
+        return new byte[] { 1, BATTERY_LEVEL_REQUEST };
+    }
 	/**
 	 * Returns message representing 'set sdk mode to 1'.
 	 * This message must be send after connecting a device.

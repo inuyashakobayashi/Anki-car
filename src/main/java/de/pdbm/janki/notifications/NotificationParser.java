@@ -22,6 +22,8 @@ public class NotificationParser {
 	static final byte TRANSITION_UPDATE = 0x29; // decimal 41
 	static final byte CHARGER_INFO      = 0x3f; // decimal 63
 	static final byte INTERSECTION_UPDATE = 0x2a; // 42
+    // 在类顶部 static final 区域添加
+    static final byte BATTERY_LEVEL_RESPONSE = 0x1b;
 	// am Ende immer {7, 54, ...} 0x36 und {3, 77, ...} 0x4D
 	
 	
@@ -127,6 +129,17 @@ public class NotificationParser {
                     bytes[2] != 0, bytes[3] != 0,
                     bytes[4] != 0, bytes[5] != 0);
 		}
+
+                        case BATTERY_LEVEL_RESPONSE: {
+                                // protocol.h 定义: uint16_t battery_level (2 bytes)
+                                // bytes[0]=长度, bytes[1]=ID, bytes[2]=低位, bytes[3]=高位
+                                int level = (bytes[2] & 0xFF) | ((bytes[3] & 0xFF) << 8);
+
+                                // 直接打印出来，简单粗暴（或者你可以封装成一个 Notification 对象）
+                                System.out.println("🔋 收到电池电量反馈: " + level + " mV");
+
+                                return new DefaultNotification(vehicle, bytes);
+                            }
 		
 		default:
 			return new DefaultNotification(vehicle, bytes);
