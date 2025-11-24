@@ -125,6 +125,7 @@ public class AnkiControlExample {
             System.out.println("2: Set Speed (300)");
             System.out.println("3: Stop (0)");
             System.out.println("4: Change Lane");
+            System.out.println("5: unturn car");
             System.out.println("8: battery level check");
             System.out.println("9: Exit");
 
@@ -145,6 +146,15 @@ public class AnkiControlExample {
                     System.out.print("Offset (-68 to 68): ");
                     float offset = scanner.nextFloat();
                     vehicle.changeLane(offset);
+                }
+                case 5 -> {
+                    // 建议先给点速度，掉头效果更好
+                    if (vehicle.getSpeed() == 0) {
+                        System.out.println("先加速到 300...");
+                        vehicle.setSpeed(300);
+                        try { Thread.sleep(1500); } catch (Exception e) {}
+                    }
+                    vehicle.uTurn();
                 }
                 case 9 -> {
                     vehicle.setSpeed(0);

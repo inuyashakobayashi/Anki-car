@@ -27,6 +27,24 @@ public class Message {
 
     // 1. 定义指令 ID (参考 protocol.h)
     private static final byte BATTERY_LEVEL_REQUEST = 0x1a;
+    // --- 新增掉头相关常量 ---
+    private static final byte TURN = 0x32; // 50
+
+    public static final byte TURN_LEFT = 1;
+    public static final byte TURN_RIGHT = 2;
+    public static final byte TURN_UTURN = 3;      // 普通掉头
+    public static final byte TURN_UTURN_JUMP = 4; // 弹射掉头 (更猛)
+
+    public static final byte TRIGGER_IMMEDIATE = 0;    // 立即执行
+    public static final byte TRIGGER_INTERSECTION = 1; // 在路口执行
+
+    /**
+     * 构建掉头指令
+     * 结构: { 长度(3), ID(0x32), 类型, 触发时机 }
+     */
+    public static byte[] turnMessage(byte type, byte trigger) {
+        return new byte[] { 3, TURN, type, trigger };
+    }
 
     // 2. 添加这个静态方法，用来生成“查询电量”的指令数据
     public static byte[] batteryLevelRequest() {

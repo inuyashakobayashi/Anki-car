@@ -333,6 +333,18 @@ public class Vehicle {
         System.out.println("正在查询电池电量...");
         sendWrite(Message.batteryLevelRequest());
     }
+    // --- 新增掉头方法 ---
+    public void uTurn() {
+        System.out.println("🚗 发送掉头指令...");
+        // 发送：类型=UTURN, 触发=立即
+        sendWrite(Message.turnMessage(Message.TURN_UTURN, Message.TRIGGER_IMMEDIATE));
+    }
+
+    // (可选) 如果你想试更猛的掉头
+    public void uTurnJump() {
+        System.out.println("🚀 发送弹射掉头指令...");
+        sendWrite(Message.turnMessage(Message.TURN_UTURN_JUMP, Message.TRIGGER_IMMEDIATE));
+    }
 
     private static class AnkiBle {
 
