@@ -37,8 +37,9 @@ public class TrackMapVisualizer {
     private Label statusLabel;
 
     // 小车显示相关
-    private ImageView vehicleView;
-    private Image vehicleImage;
+// 添加新的
+    private Map<String, ImageView> vehicleViews = new HashMap<>(); // Key: 车辆MAC地址, Value: 图标
+    private String[] carImages = {"car1.png", "car2.png"}; // 可用的车辆图片
 
     /**
      * 创建并显示可视化窗口
@@ -413,37 +414,52 @@ public class TrackMapVisualizer {
      */
     public void enableVehicleDisplay() {
         Platform.runLater(() -> {
-            if (vehicleView == null) {
-                initializeVehicle();
+            // 清除旧的车辆显示（如果需要重置）
+            for (ImageView view : vehicleViews.values()) {
+                trackPane.getChildren().remove(view);
             }
+            vehicleViews.clear();
         });
     }
 
     /**
      * 初始化小车图标
      */
-    private void initializeVehicle() {
-        // 加载小车图片
-        vehicleImage = ActualTrackImageLoader.getTrackImageByName("car1.png");
-
-        if (vehicleImage != null) {
-            vehicleView = new ImageView(vehicleImage);
-            vehicleView.setFitWidth(CAR_SIZE);
-            vehicleView.setFitHeight(CAR_SIZE);
-            vehicleView.setPreserveRatio(true);
-            vehicleView.setSmooth(true);
-
-            // 初始位置在屏幕外（等待第一次位置更新）
-            vehicleView.setLayoutX(-100);
-            vehicleView.setLayoutY(-100);
-
-            // 添加到画布（放在最上层）
-            trackPane.getChildren().add(vehicleView);
-
-            System.out.println("✓ 小车图标已加载");
-        } else {
-            System.err.println("❌ 无法加载小车图片 car1.png");
+    /**
+     * 获取或创建指定车辆的图标
+     */
+    private ImageView getOrCreateVehicleView(String vehicleId) {
+        if (vehicleViews.containsKey(vehicleId)) {
+            return vehicleViews.get(vehicleId);
         }
+
+        // 创建新图标
+        // 简单的轮询分配图片：第1辆用car1，第2辆用car2...
+        int index = vehicleViews.size() % carImages.length;
+        String imageName = carImages[index];
+        Image image = ActualTrackImageLoader.getTrackImageByName(imageName);
+
+        if (image == null) {
+            System.err.println("❌ 无法加载车辆图片: " + imageName);
+            return null;
+        }
+
+        ImageView view = new ImageView(image);
+        view.setFitWidth(CAR_SIZE);
+        view.setFitHeight(CAR_SIZE);
+        view.setPreserveRatio(true);
+        view.setSmooth(true);
+
+        // 初始位置在屏幕外
+        view.setLayoutX(-100);
+        view.setLayoutY(-100);
+
+        // 添加到界面
+        trackPane.getChildren().add(view);
+        vehicleViews.put(vehicleId, view);
+
+        System.out.println("🆕 新车辆加入显示: " + vehicleId + " (使用 " + imageName + ")");
+        return view;
     }
 
     /**
@@ -452,39 +468,37 @@ public class TrackMapVisualizer {
      * @param screenX 屏幕X坐标
      * @param screenY 屏幕Y坐标
      */
-    public void updateVehiclePosition(double screenX, double screenY) {
-        if (vehicleView == null) {
-            return;
-        }
-
+    /**
+     * 更新指定车辆的位置
+     * @param vehicleId 车辆唯一标识 (MAC地址)
+     */
+    public void updateVehiclePosition(String vehicleId, double screenX, double screenY) {
         Platform.runLater(() -> {
-            // screenX/screenY 已经是tile中心坐标
-            // 我们需要减去小车图标的一半，使小车中心对齐到这个点
+            ImageView view = getOrCreateVehicleView(vehicleId);
+            if (view == null) return;
+
+            // 居中显示
             double centerX = screenX - CAR_SIZE / 2.0;
             double centerY = screenY - CAR_SIZE / 2.0;
 
-            vehicleView.setLayoutX(centerX);
-            vehicleView.setLayoutY(centerY);
-
-            System.out.printf("🚗 小车移动到: (%.0f, %.0f)\n", centerX, centerY);
+            view.setLayoutX(centerX);
+            view.setLayoutY(centerY);
         });
     }
 
     /**
-     * 更新小车方向（旋转角度）
-     *
-     * @param direction 小车当前方向
+     * 更新指定车辆的方向
+     * @param vehicleId 车辆唯一标识 (MAC地址)
      */
-    public void updateVehicleDirection(SimpleTrackMapper.Direction direction) {
-        if (vehicleView == null || direction == null) {
-            return;
-        }
-
+    public void updateVehicleDirection(String vehicleId, SimpleTrackMapper.Direction direction) {
         Platform.runLater(() -> {
-            double rotation = getDirectionRotation(direction);
-            vehicleView.setRotate(rotation);
+            ImageView view = getOrCreateVehicleView(vehicleId);
+            if (view == null || direction == null) return;
 
-            System.out.printf("🔄 小车旋转到: %.0f° (%s)\n", rotation, direction);
+            double rotation = getDirectionRotation(direction);
+            view.setRotate(rotation);
         });
     }
+
+
 }

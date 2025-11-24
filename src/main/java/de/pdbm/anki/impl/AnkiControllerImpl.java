@@ -34,12 +34,19 @@ public class AnkiControllerImpl implements AnkiController {
 
     public AnkiControllerImpl() {
         // 确保 DBus 连接已创建 (单例模式)
+        // 修正逻辑：先尝试获取，如果捕获到 IllegalStateException 说明没创建，则进行创建
         try {
-            if (DeviceManager.getInstance() == null) {
+            DeviceManager.getInstance();
+        } catch (IllegalStateException e) {
+            // 实例不存在，创建它
+            try {
                 DeviceManager.createInstance(false);
+                LOGGER.debug("DeviceManager created successfully");
+            } catch (Exception dbusEx) {
+                LOGGER.error("Failed to create DeviceManager: {}", dbusEx.getMessage());
             }
         } catch (Exception e) {
-            // 忽略，可能已经创建过了
+            LOGGER.error("Error checking DeviceManager: {}", e.getMessage());
         }
         LOGGER.debug("AnkiController implementation initialized");
     }

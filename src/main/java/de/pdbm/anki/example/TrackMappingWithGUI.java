@@ -7,6 +7,7 @@ import de.pdbm.anki.tracking.SimpleTrackMapper;
 import de.pdbm.anki.tracking.SimpleTrackMapper.TrackPiece;
 import de.pdbm.anki.tracking.TrackMapData;
 import de.pdbm.anki.tracking.TrackMapIO;
+import de.pdbm.janki.RoadPiece;
 import de.pdbm.janki.notifications.PositionUpdate;
 import de.pdbm.janki.notifications.PositionUpdateListener;
 import de.pdbm.janki.Vehicle;
@@ -283,7 +284,7 @@ public class TrackMappingWithGUI extends Application {
             vehicle.addNotificationListener(new PositionUpdateListener() {
                 @Override
                 public void onPositionUpdate(PositionUpdate update) {
-                    handleLivePositionUpdate(update);
+                    handleLivePositionUpdate(vehicle, update);
                 }
             });
         }
@@ -298,10 +299,11 @@ public class TrackMappingWithGUI extends Application {
     /**
      * 处理实时位置更新（使用 locationId + roadPieceId 精确定位）
      */
-    private void handleLivePositionUpdate(PositionUpdate update) {
+    private void handleLivePositionUpdate(Vehicle vehicle,PositionUpdate update) {
         int locationId = update.getLocation();
         int roadPieceId = update.getRoadPieceId();
-        de.pdbm.janki.RoadPiece roadPieceType = update.getRoadPiece();
+        RoadPiece roadPieceType =update.getRoadPiece();
+        String vehicleId = vehicle.getMacAddress(); // 获取 MAC 地址
 
         // 使用 (locationId, roadPieceId) 精确组合查找对应的 piece
         TrackMapData.PieceLocationInfo info = trackMapData.findPieceByLocationAndId(locationId, roadPieceId);
@@ -322,12 +324,11 @@ public class TrackMappingWithGUI extends Application {
             double screenX = normalizedX * TILE_SIZE + TILE_SIZE / 2.0;
             double screenY = normalizedY * TILE_SIZE + TILE_SIZE / 2.0;
 
-            // 更新小车位置
-            visualizer.updateVehiclePosition(screenX, screenY);
+// === 修改这里：调用带 vehicleId 的新方法 ===
+            visualizer.updateVehiclePosition(vehicleId, screenX, screenY);
 
-            // 更新小车方向
             if (piece.exitDirection != null) {
-                visualizer.updateVehicleDirection(piece.exitDirection);
+                visualizer.updateVehicleDirection(vehicleId, piece.exitDirection);
             }
 
             // 打印调试信息
