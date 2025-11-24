@@ -130,16 +130,12 @@ public class NotificationParser {
                     bytes[4] != 0, bytes[5] != 0);
 		}
 
-                        case BATTERY_LEVEL_RESPONSE: {
-                                // protocol.h 定义: uint16_t battery_level (2 bytes)
-                                // bytes[0]=长度, bytes[1]=ID, bytes[2]=低位, bytes[3]=高位
-                                int level = (bytes[2] & 0xFF) | ((bytes[3] & 0xFF) << 8);
-
-                                // 直接打印出来，简单粗暴（或者你可以封装成一个 Notification 对象）
-                                System.out.println("🔋 收到电池电量反馈: " + level + " mV");
-
-                                return new DefaultNotification(vehicle, bytes);
-                            }
+// 找到 BATTERY_LEVEL_RESPONSE 的 case
+            case BATTERY_LEVEL_RESPONSE: {
+                int level = (bytes[2] & 0xFF) | ((bytes[3] & 0xFF) << 8);
+                // 修改为返回具体的 Notification 对象，而不是打印
+                return new BatteryNotification(vehicle, level);
+            }
 		
 		default:
 			return new DefaultNotification(vehicle, bytes);

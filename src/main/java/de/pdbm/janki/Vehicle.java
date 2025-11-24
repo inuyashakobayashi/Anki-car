@@ -288,6 +288,11 @@ public class Vehicle {
                         }
                     }
                 }
+                case BatteryNotification bn -> {
+                    for (NotificationListener l : listeners) {
+                        if (l instanceof BatteryListener bl) bl.onBatteryLevel(bn);
+                    }
+                }
                 default -> {}
             }
         } catch (Exception e) {
