@@ -3,6 +3,10 @@ package de.pdbm.anki.gui;
 import de.pdbm.anki.tracking.SimpleTrackMapper;
 import de.pdbm.anki.tracking.SimpleTrackMapper.TrackPiece;
 import de.pdbm.janki.RoadPiece;
+import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -10,6 +14,7 @@ import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
+import javafx.util.Duration;
 
 import java.util.HashMap;
 import java.util.List;
@@ -17,67 +22,57 @@ import java.util.Map;
 
 /**
  * 轨道地图可视化组件
- * 负责渲染轨道地图和车辆位置
+ * 负责渲染轨道地图和车辆位置，支持平滑动画
  */
 public class TrackMapVisualizer {
 
     private static final int TILE_SIZE = 250; // 需与 TrackMappingWithGUI 中的一致
-    private static final int CAR_SIZE = 100;   // 小车图标大小
+    private static final int CAR_SIZE = 100;  // 小车图标大小
+    private static final double ANIMATION_DURATION = 200; // 动画时长 (毫秒)
 
     private final Pane trackPane;
 
-    // 缓存轨道片段的 ImageView (Key: "x,y")
+    // 缓存
     private final Map<String, ImageView> pieceViews = new HashMap<>();
-
-    // 多车支持 (Key: MAC地址)
     private final Map<String, ImageView> vehicleViews = new HashMap<>();
 
-    // 可用的车辆图片资源
+    // 动画状态缓存 (Key: vehicleId)
+    private final Map<String, Timeline> positionAnimations = new HashMap<>();
+    private final Map<String, Timeline> rotationAnimations = new HashMap<>();
+
     private final String[] carImages = {"car1.png", "car2.png"};
 
-    /**
-     * 构造函数：初始化画布
-     */
     public TrackMapVisualizer() {
         trackPane = new Pane();
-        // 设置深色背景，模拟赛道环境
         trackPane.setBackground(new Background(new BackgroundFill(Color.web("#2b2b2b"), null, null)));
+
+        // 鼠标点击调试 (保留，方便你后续校准)
+        trackPane.setOnMouseClicked(e -> {
+            System.out.printf("🖱️ [DEBUG] 点击: (%.2f, %.2f)\n", e.getX(), e.getY());
+        });
     }
 
-    /**
-     * 获取显示面板 (用于嵌入主界面)
-     */
     public Pane getTrackPane() {
         return trackPane;
     }
 
-    /**
-     * 更新显示的轨道地图
-     */
     public void updateTrackMap(List<TrackPiece> pieces) {
         if (pieces == null || pieces.isEmpty()) return;
 
         Platform.runLater(() -> {
-            // 清除旧的轨道片段 (保留车辆图标)
-            // 注意：为了不闪烁，最好只增量更新，但为了简单这里先全量重绘轨道层
-            // 实际操作中需要把车辆 View 提出来再加回去，或者分层管理
-            // 这里简单处理：先全清，再重绘轨道，再重绘车辆
-
             trackPane.getChildren().clear();
             pieceViews.clear();
 
-            // 找到坐标范围
             int minX = pieces.stream().mapToInt(p -> p.x).min().orElse(0);
             int maxX = pieces.stream().mapToInt(p -> p.x).max().orElse(0);
             int minY = pieces.stream().mapToInt(p -> p.y).min().orElse(0);
             int maxY = pieces.stream().mapToInt(p -> p.y).max().orElse(0);
 
-            // 渲染每个轨道片段
             for (TrackPiece piece : pieces) {
                 renderTrackPiece(piece, minX, minY, maxY);
             }
 
-            // 重新添加所有车辆图标 (因为刚才 clear() 掉了)
+            // 重新添加车辆
             for (ImageView carView : vehicleViews.values()) {
                 trackPane.getChildren().add(carView);
             }
@@ -85,48 +80,101 @@ public class TrackMapVisualizer {
     }
 
     /**
-     * 更新指定车辆的位置
-     * @param vehicleId 车辆 MAC 地址
-     * @param screenX 屏幕 X 坐标 (Tile 中心点)
-     * @param screenY 屏幕 Y 坐标 (Tile 中心点)
+     * 平滑更新车辆位置
      */
     public void updateVehiclePosition(String vehicleId, double screenX, double screenY) {
         Platform.runLater(() -> {
             ImageView view = getOrCreateVehicleView(vehicleId);
             if (view == null) return;
 
-            // 居中显示：减去图标的一半大小
-            double centerX = screenX - CAR_SIZE / 2.0;
-            double centerY = screenY - CAR_SIZE / 2.0;
+            double targetX = screenX - CAR_SIZE / 2.0;
+            double targetY = screenY - CAR_SIZE / 2.0;
 
-            view.setLayoutX(centerX);
-            view.setLayoutY(centerY);
-            view.toFront(); // 确保车在轨道上面
+            // 距离太远则瞬移 (比如初始化)
+            double dist = Math.sqrt(Math.pow(targetX - view.getLayoutX(), 2) + Math.pow(targetY - view.getLayoutY(), 2));
+            if (dist > TILE_SIZE * 2 || view.getLayoutX() < -500) {
+                view.setLayoutX(targetX);
+                view.setLayoutY(targetY);
+                return;
+            }
+
+            // 停止旧动画
+            if (positionAnimations.containsKey(vehicleId)) {
+                positionAnimations.get(vehicleId).stop();
+            }
+
+            // 启动新动画
+            Timeline timeline = new Timeline();
+            KeyValue kvX = new KeyValue(view.layoutXProperty(), targetX, Interpolator.LINEAR);
+            KeyValue kvY = new KeyValue(view.layoutYProperty(), targetY, Interpolator.LINEAR);
+            KeyFrame kf = new KeyFrame(Duration.millis(ANIMATION_DURATION), kvX, kvY);
+            timeline.getKeyFrames().add(kf);
+            timeline.play();
+
+            positionAnimations.put(vehicleId, timeline);
         });
     }
 
     /**
-     * 更新指定车辆的方向
+     * [关键修复] 直接更新车辆角度 (0-360度)
+     * 配合 TrajectoryCalculator 使用
+     */
+    public void updateVehicleAngle(String vehicleId, double angle) {
+        Platform.runLater(() -> {
+            ImageView view = getOrCreateVehicleView(vehicleId);
+            if (view == null) return;
+
+            double currentAngle = view.getRotate();
+
+            // 智能旋转计算 (寻找最短路径，处理 0/360 跳变)
+            currentAngle = currentAngle % 360;
+            if (currentAngle < 0) currentAngle += 360;
+
+            double targetAngle = angle % 360;
+            if (targetAngle < 0) targetAngle += 360;
+
+            double diff = targetAngle - currentAngle;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+
+            double finalAngle = currentAngle + diff;
+
+            // 停止旧动画
+            if (rotationAnimations.containsKey(vehicleId)) {
+                rotationAnimations.get(vehicleId).stop();
+            }
+
+            // 启动旋转动画
+            Timeline timeline = new Timeline();
+            KeyValue kvRot = new KeyValue(view.rotateProperty(), finalAngle, Interpolator.LINEAR);
+            KeyFrame kf = new KeyFrame(Duration.millis(ANIMATION_DURATION), kvRot);
+            timeline.getKeyFrames().add(kf);
+            timeline.play();
+
+            rotationAnimations.put(vehicleId, timeline);
+        });
+    }
+
+    /**
+     * 更新车辆方向 (保留旧接口，兼容性)
      */
     public void updateVehicleDirection(String vehicleId, SimpleTrackMapper.Direction direction) {
         Platform.runLater(() -> {
-            ImageView view = getOrCreateVehicleView(vehicleId);
-            if (view == null || direction == null) return;
-
-            double rotation = getDirectionRotation(direction);
-            view.setRotate(rotation);
+            // 如果已经用了 updateVehicleAngle，这个方法通常可以忽略，或者作为 fallback
+            // 这里简单的将其转换为角度调用
+            if (direction != null) {
+                // 注意：这里的角度可能需要根据你的车头朝向调整
+                double angle = getDirectionRotation(direction);
+                updateVehicleAngle(vehicleId, angle);
+            }
         });
     }
 
-    /**
-     * 获取或创建车辆图标
-     */
     private ImageView getOrCreateVehicleView(String vehicleId) {
         if (vehicleViews.containsKey(vehicleId)) {
             return vehicleViews.get(vehicleId);
         }
 
-        // 分配图片 (轮询)
         int index = vehicleViews.size() % carImages.length;
         String imageName = carImages[index];
         Image image = ActualTrackImageLoader.getTrackImageByName(imageName);
@@ -138,8 +186,6 @@ public class TrackMapVisualizer {
         view.setFitHeight(CAR_SIZE);
         view.setPreserveRatio(true);
         view.setSmooth(true);
-
-        // 初始位置在屏幕外
         view.setLayoutX(-1000);
         view.setLayoutY(-1000);
 
@@ -159,8 +205,6 @@ public class TrackMapVisualizer {
         double rotation = getRotationForPiece(piece);
         imageView.setRotate(rotation);
 
-        // 坐标转换：将网格坐标映射到屏幕坐标
-        // Y轴反转：网格Y向上，屏幕Y向下
         int normalizedX = piece.x - minX;
         int normalizedY = maxY - piece.y;
 
@@ -174,20 +218,13 @@ public class TrackMapVisualizer {
         pieceViews.put(piece.x + "," + piece.y, imageView);
     }
 
-    // === 辅助方法：选择图片和计算旋转 (逻辑保持不变) ===
-
     private Image getImageForPiece(TrackPiece piece) {
         switch (piece.roadPiece) {
-            case START: case FINISH:
-                return ActualTrackImageLoader.getTrackImageByName("start.png");
-            case STRAIGHT:
-                return ActualTrackImageLoader.getTrackImageByName("straight0.png");
-            case CORNER:
-                return getCornerImage(piece);
-            case INTERSECTION:
-                return ActualTrackImageLoader.getTrackImageByName("intersection.png");
-            default:
-                return ActualTrackImageLoader.getTrackImageByName("straight0.png");
+            case START: case FINISH: return ActualTrackImageLoader.getTrackImageByName("start.png");
+            case STRAIGHT: return ActualTrackImageLoader.getTrackImageByName("straight0.png");
+            case CORNER: return getCornerImage(piece);
+            case INTERSECTION: return ActualTrackImageLoader.getTrackImageByName("intersection.png");
+            default: return ActualTrackImageLoader.getTrackImageByName("straight0.png");
         }
     }
 
@@ -199,6 +236,10 @@ public class TrackMapVisualizer {
         return ActualTrackImageLoader.getTrackImageByName(selectedImage);
     }
 
+    /**
+     * 选择弯道图片逻辑 (你可以根据需要改回你自己觉得正确的版本)
+     * 这里保留一个比较通用的推测版本
+     */
     private String selectCurveByEnterAndExit(SimpleTrackMapper.Direction enter, SimpleTrackMapper.Direction exit) {
         boolean isLeftTurn = (exit == enter.decrement());
         if (isLeftTurn) {
@@ -221,19 +262,22 @@ public class TrackMapVisualizer {
 
     private double getRotationForPiece(TrackPiece piece) {
         if (piece.enterDirection == null) return 0;
-        // 只有直道需要旋转，弯道靠图片本身区分，路口不需要
         if (piece.roadPiece == RoadPiece.STRAIGHT || piece.roadPiece == RoadPiece.START || piece.roadPiece == RoadPiece.FINISH) {
             return getDirectionRotation(piece.enterDirection);
         }
         return 0;
     }
 
+    /**
+     * 计算直道旋转角度
+     * 针对【横向原图】(straight0.png 是东西向) 的修正
+     */
     private double getDirectionRotation(SimpleTrackMapper.Direction direction) {
         switch (direction) {
-            case POSITIVE_X: return 0;
-            case NEGATIVE_Y: return 90;
-            case NEGATIVE_X: return 180;
-            case POSITIVE_Y: return 270;
+            case POSITIVE_X: return 0;    // 向右 -> 不转 (保持横向)
+            case NEGATIVE_X: return 180;  // 向左 -> 转180 (保持横向)
+            case POSITIVE_Y: return 270;  // 向上 -> 转270 (变竖直)
+            case NEGATIVE_Y: return 90;   // 向下 -> 转90 (变竖直)
             default: return 0;
         }
     }

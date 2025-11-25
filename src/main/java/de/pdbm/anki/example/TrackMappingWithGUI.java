@@ -8,6 +8,7 @@ import de.pdbm.anki.tracking.SimpleTrackMapper;
 import de.pdbm.anki.tracking.SimpleTrackMapper.TrackPiece;
 import de.pdbm.anki.tracking.TrackMapData;
 import de.pdbm.anki.tracking.TrackMapIO;
+import de.pdbm.janki.RoadPiece;
 import de.pdbm.janki.Vehicle;
 import de.pdbm.janki.notifications.PositionUpdate;
 import de.pdbm.janki.notifications.PositionUpdateListener;
@@ -243,48 +244,54 @@ public class TrackMappingWithGUI extends Application {
     }
 
     /**
-     * 全局位置处理：更新地图上的车辆图标和仪表盘数据
+     * 全局位置处理：计算精确的 (x,y) 和 角度
      */
     private void handleGlobalPositionUpdate(AnkiController controller, PositionUpdate update) {
         String vehicleId = controller.getVehicle().getMacAddress();
 
-        // 1. 更新仪表盘 (如果有)
-        // 注意：TilesFX 的 Gauge 不需要太频繁更新，这里是最实时的数据
-        // 如果你在 VehicleDashboard 里没有单独监听 PositionUpdate，可以在这里调用
-        // VehicleDashboard dashboard = vehicleDashboards.get(vehicleId);
-        // if (dashboard != null) dashboard.updateSpeed(update.getSpeed()); // 假设 update 里有速度
-
-        // 2. 更新地图位置 (仅当有地图数据时)
         if (finalTrackData != null) {
-            // 查找当前位置对应的轨道片段
             TrackMapData.PieceLocationInfo info = finalTrackData.findPieceByLocationAndId(
                     update.getLocation(), update.getRoadPieceId());
 
             if (info != null) {
                 TrackPiece piece = info.piece;
 
-                // 计算屏幕坐标
+                // 1. 计算 Tile 左上角的屏幕坐标
                 List<TrackPiece> pieces = finalTrackData.getPieces();
                 int minX = pieces.stream().mapToInt(p -> p.x).min().orElse(0);
                 int maxY = pieces.stream().mapToInt(p -> p.y).max().orElse(0);
 
-                int normalizedX = piece.x - minX;
-                int normalizedY = maxY - piece.y;
+                double tileOriginX = (piece.x - minX) * TILE_SIZE;
+                double tileOriginY = (maxY - piece.y) * TILE_SIZE;
 
-                // 居中显示在 Tile 上
-                double screenX = normalizedX * TILE_SIZE + TILE_SIZE / 2.0;
-                double screenY = normalizedY * TILE_SIZE + TILE_SIZE / 2.0;
+                // 2. 计算 Tile 内部的精确偏移量 (Local Offset)
+                // === 修复点：使用 TrajectoryCalculator.TrajectoryPoint ===
+                TrajectoryCalculator.TrajectoryPoint localPoint = TrajectoryCalculator.calculatePoint(
+                        piece.roadPiece,
+                        piece.enterDirection,
+                        piece.exitDirection,
+                        info.progress, // 0.0 - 1.0
+                        TILE_SIZE
+                );
 
-                // 更新可视化器
+                // 3. 合成全局坐标
+                double screenX = tileOriginX + localPoint.x;
+                double screenY = tileOriginY + localPoint.y;
+// === 🔴 在这里加上调试日志 ===
+                System.out.println("🚗 [DEBUG] 小车计算位置:");
+                System.out.printf("   RoadPiece: %s (ID:%d) 方向: %s->%s\n",
+                        info.piece.roadPiece, info.piece.roadPieceId,
+                        info.piece.enterDirection, info.piece.exitDirection);
+                System.out.printf("   进度: %.2f%%  计算坐标: (%.2f, %.2f)\n",
+                        info.progress * 100, screenX, screenY);
+                System.out.println("------------------------------------------------");
+                // ============================
+                // 4. 更新可视化 (位置 + 角度)
                 visualizer.updateVehiclePosition(vehicleId, screenX, screenY);
-
-                if (piece.exitDirection != null) {
-                    visualizer.updateVehicleDirection(vehicleId, piece.exitDirection);
-                }
+                visualizer.updateVehicleAngle(vehicleId, localPoint.angle);
             }
         }
     }
-
     private void updateStatus(String message) {
         Platform.runLater(() -> {
             if (statusLabel != null) {
@@ -310,5 +317,129 @@ public class TrackMappingWithGUI extends Application {
         }
 
         System.exit(0);
+    }
+    /**
+     * 轨迹计算器：计算车子在 Tile 内的精确 (x,y) 坐标
+     * * 针对 "车头朝左" 的图片进行了角度修正 (+180度)
+     */
+    public static class TrajectoryCalculator {
+
+        public static class TrajectoryPoint {
+            public double x, y, angle;
+            public TrajectoryPoint(double x, double y, double angle) {
+                this.x = x; this.y = y; this.angle = angle;
+            }
+        }
+
+        public static TrajectoryPoint calculatePoint(RoadPiece type,
+                                                     SimpleTrackMapper.Direction enter,
+                                                     SimpleTrackMapper.Direction exit,
+                                                     double progress,
+                                                     double size) {
+
+            if (type == RoadPiece.STRAIGHT || type == RoadPiece.START || type == RoadPiece.FINISH) {
+                return calculateStraight(enter, progress, size);
+            }
+
+            if (type == RoadPiece.CORNER) {
+                return calculateCurve(enter, exit, progress, size);
+            }
+
+            // INTERSECTION 默认直行
+            return calculateStraight(enter, progress, size);
+        }
+
+        private static TrajectoryPoint calculateStraight(SimpleTrackMapper.Direction enter, double p, double s) {
+            double m = s / 2.0;
+            double x = m, y = m, angle = 0;
+
+            // 修正逻辑：
+            // 1. 计算出车子应该朝向的【地理角度】(右=0, 下=90, 左=180, 上=270)
+            // 2. 因为原图是朝左(180)的，所以【显示角度】 = 【地理角度】 + 180
+
+            switch (enter) {
+                case POSITIVE_X: // 向右行驶 (地理角度 0)
+                    x = p * s;
+                    y = m;
+                    angle = 0 + 180; // 修正后 180
+                    break;
+                case NEGATIVE_X: // 向左行驶 (地理角度 180)
+                    x = s - (p * s);
+                    y = m;
+                    angle = 180 + 180; // 修正后 0
+                    break;
+                case POSITIVE_Y: // 向上行驶 (地理角度 270)
+                    x = m;
+                    y = s - (p * s);
+                    angle = 270 + 180; // 修正后 90
+                    break;
+                case NEGATIVE_Y: // 向下行驶 (地理角度 90)
+                    x = m;
+                    y = p * s;
+                    angle = 90 + 180; // 修正后 270
+                    break;
+            }
+            return new TrajectoryPoint(x, y, angle);
+        }
+
+        private static TrajectoryPoint calculateCurve(SimpleTrackMapper.Direction enter, SimpleTrackMapper.Direction exit, double p, double s) {
+            double r = s / 2.0;
+
+            // 弯道计算：基于标准圆弧公式，计算出地理角度
+            // 参数: 圆心(cx, cy), 半径r, 起始角度start, 扫过角度sweep, 进度p
+
+            // 1. 右转: 向右进 -> 向下出
+            if (enter == SimpleTrackMapper.Direction.POSITIVE_X && exit == SimpleTrackMapper.Direction.NEGATIVE_Y) {
+                return calcArc(0, s, r, 270, 90, p);
+            }
+            // 2. 左转: 向左进 -> 向下出
+            else if (enter == SimpleTrackMapper.Direction.NEGATIVE_X && exit == SimpleTrackMapper.Direction.NEGATIVE_Y) {
+                return calcArc(s, s, r, 270, -90, p);
+            }
+            // 3. 左转: 向右进 -> 向上出
+            else if (enter == SimpleTrackMapper.Direction.POSITIVE_X && exit == SimpleTrackMapper.Direction.POSITIVE_Y) {
+                return calcArc(0, 0, r, 90, -90, p);
+            }
+            // 4. 右转: 向左进 -> 向上出
+            else if (enter == SimpleTrackMapper.Direction.NEGATIVE_X && exit == SimpleTrackMapper.Direction.POSITIVE_Y) {
+                return calcArc(s, 0, r, 90, 90, p);
+            }
+            // 5. 左转: 向下进 -> 向右出
+            else if (enter == SimpleTrackMapper.Direction.NEGATIVE_Y && exit == SimpleTrackMapper.Direction.POSITIVE_X) {
+                return calcArc(s, 0, r, 180, -90, p);
+            }
+            // 6. 右转: 向下进 -> 向左出
+            else if (enter == SimpleTrackMapper.Direction.NEGATIVE_Y && exit == SimpleTrackMapper.Direction.NEGATIVE_X) {
+                return calcArc(0, 0, r, 0, 90, p); // Start 0 (Right) -> 90 (Down)
+            }
+            // 7. 右转: 向上进 -> 向右出
+            else if (enter == SimpleTrackMapper.Direction.POSITIVE_Y && exit == SimpleTrackMapper.Direction.POSITIVE_X) {
+                return calcArc(s, s, r, 180, 90, p);
+            }
+            // 8. 左转: 向上进 -> 向左出
+            else if (enter == SimpleTrackMapper.Direction.POSITIVE_Y && exit == SimpleTrackMapper.Direction.NEGATIVE_X) {
+                return calcArc(0, s, r, 0, -90, p);
+            }
+
+            return new TrajectoryPoint(s/2, s/2, 0);
+        }
+
+        private static TrajectoryPoint calcArc(double cx, double cy, double r, double startDeg, double sweepDeg, double p) {
+            double currentDeg = startDeg + sweepDeg * p;
+            double rad = Math.toRadians(currentDeg);
+
+            // 计算位置 (基于 JavaFX 坐标系)
+            double x = cx + r * Math.cos(rad);
+            double y = cy + r * Math.sin(rad);
+
+            // 计算地理车头角度 (切线方向)
+            // 顺时针(sweep>0) -> 角度+90, 逆时针(sweep<0) -> 角度-90
+            double geoAngle = currentDeg + (sweepDeg > 0 ? 90 : -90);
+
+            // === 修正车头朝左原图 ===
+            double finalAngle = geoAngle + 180;
+
+            return new TrajectoryPoint(x, y, finalAngle);
+        }
     }
 }
