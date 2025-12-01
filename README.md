@@ -1,4 +1,4 @@
-# Anki Overdrive Controller
+#### Anki Overdrive Controller
 
 Ein umfassender Anki Overdrive Fahrzeugcontroller mit Bluetooth-Verbindung, Streckenerfassung und Fahrzeugsteuerung.
 
@@ -6,10 +6,11 @@ Ein umfassender Anki Overdrive Fahrzeugcontroller mit Bluetooth-Verbindung, Stre
 
 ### Systemanforderungen
 
-- **Betriebssystem**: Linux (getestet auf Pop!_OS )
-- **Java**: JDK 22 (vom Projekt gefordert)
+- **Betriebssystem**: Linux (getest auf EndeavourOS kernel version:6.17.8)
+- **Java**: JDK 24 mit javafx eingabaut (liberica 24.02 full)(vom Projekt gefordert)
 - **Maven**: 3.6.0 oder höher
 - **Bluetooth**: Bluetooth 4.0+ (BLE) kompatible Adapter
+- **bluez**:bluez version
 
 ### Projektstruktur
 
