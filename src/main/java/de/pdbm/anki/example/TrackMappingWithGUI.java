@@ -41,7 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TrackMappingWithGUI extends Application {
 
     private static final int MAPPING_SPEED = 300;
-    private static final int TILE_SIZE = 150; // 需与 Visualizer 中的一致
+    private static final int TILE_SIZE = 250; // 需与 Visualizer 中的一致
 
     // GUI 组件
     private TrackMapVisualizer visualizer;
