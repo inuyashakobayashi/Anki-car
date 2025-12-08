@@ -125,9 +125,13 @@ public class AnkiControlExample {
             System.out.println("2: Set Speed (300)");
             System.out.println("3: Stop (0)");
             System.out.println("4: Change Lane");
-            System.out.println("5: unturn car");
-            System.out.println("6: light test");
-            System.out.println("8: battery level check");
+            System.out.println("5: U-turn car");
+            System.out.println("6: Light test (basic)");
+            System.out.println("7: Ping test");
+            System.out.println("8: Battery level check");
+            System.out.println("10: Query firmware version");
+            System.out.println("11: Cancel lane change");
+            System.out.println("12: Light pattern effects");
             System.out.println("9: Exit");
 
             System.out.print("Choice: ");
@@ -195,6 +199,41 @@ public class AnkiControlExample {
                 case 8 -> {
                     vehicle.queryBatteryLevel();
                 }
+                case 7 -> {
+                    System.out.println("Sending Ping...");
+                    vehicle.ping();
+                }
+                case 10 -> {
+                    System.out.println("Querying firmware version...");
+                    vehicle.queryVersion();
+                }
+                case 11 -> {
+                    System.out.println("Canceling lane change...");
+                    vehicle.cancelLaneChange();
+                }
+                case 12 -> {
+                    System.out.println("\n=== Light Pattern Effects ===");
+                    System.out.println("1: Red throb (breathing)");
+                    System.out.println("2: Blue throb (breathing)");
+                    System.out.println("3: Green throb (breathing)");
+                    System.out.println("4: Warning flash (red)");
+                    System.out.println("5: Police lights (red+blue)");
+                    System.out.println("6: Rainbow effect");
+                    System.out.println("0: Turn off patterns");
+                    System.out.print("Select effect: ");
+                    int effect = scanner.nextInt();
+                    scanner.nextLine();
+                    switch (effect) {
+                        case 1 -> vehicle.lightPatternRedThrob(30);
+                        case 2 -> vehicle.lightPatternBlueThrob(30);
+                        case 3 -> vehicle.lightPatternGreenThrob(30);
+                        case 4 -> vehicle.lightPatternWarning();
+                        case 5 -> vehicle.lightPatternPolice();
+                        case 6 -> vehicle.lightPatternRainbow();
+                        case 0 -> vehicle.lightPatternOff();
+                        default -> System.out.println("Invalid effect");
+                    }
+                }
                 default -> System.out.println("Invalid command");
             }
         }
@@ -213,8 +252,56 @@ public class AnkiControlExample {
             @Override
             public void onChargerInfoNotification(ChargerInfoNotification notification) {
                 if (notification.isOnCharger()) {
-                    System.out.println("⚠️ Vehicle is on charger!");
+                    System.out.println("Vehicle is on charger!");
                 }
+            }
+        });
+
+        // Ping 响应监听器
+        vehicle.addNotificationListener(new PingResponseListener() {
+            @Override
+            public void onPingResponse(PingResponse pingResponse) {
+                System.out.println("[PING] Response received! Vehicle is alive.");
+                writeToLog("Ping response received");
+            }
+        });
+
+        // 版本响应监听器
+        vehicle.addNotificationListener(new VersionResponseListener() {
+            @Override
+            public void onVersionResponse(VersionResponse versionResponse) {
+                System.out.println("[VERSION] Firmware version: " + versionResponse.getVersionString() +
+                        " (raw: 0x" + Integer.toHexString(versionResponse.getVersion()) + ")");
+                writeToLog("Version: " + versionResponse.getVersionString());
+            }
+        });
+
+        // 脱轨监听器
+        vehicle.addNotificationListener(new DelocalizedListener() {
+            @Override
+            public void onDelocalized(DelocalizedNotification notification) {
+                System.out.println("[WARNING] Vehicle DELOCALIZED! (Off track)");
+                writeToLog("DELOCALIZED - Vehicle off track!");
+            }
+        });
+
+        // 电池响应监听器
+        vehicle.addNotificationListener(new BatteryListener() {
+            @Override
+            public void onBatteryLevel(BatteryNotification notification) {
+                int percentage = (int) (notification.getPercentage() * 100);
+                System.out.println("[BATTERY] Level: " + notification.getBatteryLevelMs() + "mV (" + percentage + "%)");
+                writeToLog("Battery: " + notification.getBatteryLevelMs() + "mV");
+            }
+        });
+
+        // 偏移更新监听器
+        vehicle.addNotificationListener(new OffsetFromRoadCenterUpdateListener() {
+            @Override
+            public void onOffsetUpdate(OffsetFromRoadCenterUpdate update) {
+                System.out.println("[OFFSET] Position: " + String.format("%.2f", update.getOffsetMm()) +
+                        "mm (laneChangeId=" + update.getLaneChangeId() + ")");
+                writeToLog("Offset: " + update.getOffsetMm() + "mm");
             }
         });
     }
