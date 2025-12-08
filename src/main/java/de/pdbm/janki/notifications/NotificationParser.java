@@ -22,8 +22,13 @@ public class NotificationParser {
 	static final byte TRANSITION_UPDATE = 0x29; // decimal 41
 	static final byte CHARGER_INFO      = 0x3f; // decimal 63
 	static final byte INTERSECTION_UPDATE = 0x2a; // 42
-    // 在类顶部 static final 区域添加
-    static final byte BATTERY_LEVEL_RESPONSE = 0x1b;
+    static final byte BATTERY_LEVEL_RESPONSE = 0x1b; // 27
+
+    // --- 新增消息类型 ---
+    static final byte PING_RESPONSE = 0x17;     // 23 - Ping 响应
+    static final byte VERSION_RESPONSE = 0x19;  // 25 - 版本响应
+    static final byte VEHICLE_DELOCALIZED = 0x2b; // 43 - 车辆脱轨
+    static final byte OFFSET_FROM_ROAD_CENTER_UPDATE = 0x2d; // 45 - 偏移更新
 	// am Ende immer {7, 54, ...} 0x36 und {3, 77, ...} 0x4D
 	
 	
@@ -130,21 +135,50 @@ public class NotificationParser {
                     bytes[4] != 0, bytes[5] != 0);
 		}
 
-// 找到 BATTERY_LEVEL_RESPONSE 的 case
-            case BATTERY_LEVEL_RESPONSE: {
-                int level = (bytes[2] & 0xFF) | ((bytes[3] & 0xFF) << 8);
-                // 修改为返回具体的 Notification 对象，而不是打印
-                return new BatteryNotification(vehicle, level);
-            }
-		
+		case BATTERY_LEVEL_RESPONSE: {
+			int level = (bytes[2] & 0xFF) | ((bytes[3] & 0xFF) << 8);
+			return new BatteryNotification(vehicle, level);
+		}
+
+		// --- 新增: Ping 响应 ---
+		case PING_RESPONSE: {
+			return new PingResponse(vehicle);
+		}
+
+		// --- 新增: 版本响应 ---
+		case VERSION_RESPONSE: {
+			// version 是 uint16_t，小端序
+			int version = (bytes[2] & 0xFF) | ((bytes[3] & 0xFF) << 8);
+			return new VersionResponse(vehicle, version);
+		}
+
+		// --- 新增: 车辆脱轨 ---
+		case VEHICLE_DELOCALIZED: {
+			return new DelocalizedNotification(vehicle);
+		}
+
+		// --- 新增: 偏移更新 ---
+		case OFFSET_FROM_ROAD_CENTER_UPDATE: {
+			/*
+			 * from protocol.h:
+			 * typedef struct anki_vehicle_msg_offset_from_road_center_update {
+			 *     uint8_t     size;
+			 *     uint8_t     msg_id;
+			 *     float       offset_from_road_center_mm;
+			 *     uint8_t     lane_change_id;
+			 * }
+			 */
+			float offset = bytesToFloat(bytes[2], bytes[3], bytes[4], bytes[5]);
+			int laneChangeId = bytes[6] & 0xFF;
+			return new OffsetFromRoadCenterUpdate(vehicle, offset, laneChangeId);
+		}
+
 		default:
 			return new DefaultNotification(vehicle, bytes);
 		}
 	}
 	
 	
-	@SuppressWarnings("unused") 
-	// not used because offset_from_road_center_mm useless values 
 	private static float bytesToFloat(byte byte0, byte byte1, byte byte2, byte byte3) {
 		int asInt = (byte0 & 0xFF) | ((byte1 & 0xFF) << 8) | ((byte2 & 0xFF) << 16) | ((byte3 & 0xFF) << 24);
 		return Float.intBitsToFloat(asInt);	
