@@ -84,15 +84,46 @@ public class TrackMapData {
         if (locationMap == null) {
             buildLocationMap();
         }
-        String key = makeLocationKeyWithId(locationId, roadPieceId);
+
+        // START(33) 和 FINISH(34) 是同一个物理片段，需要互相尝试
+        int normalizedId = normalizeStartFinish(roadPieceId);
+        int alternateId = getAlternateStartFinish(roadPieceId);
+
+        String key = makeLocationKeyWithId(locationId, normalizedId);
         PieceLocationInfo result = locationMap.get(key);
+
+        // 尝试备用 ID (START <-> FINISH)
+        if (result == null && alternateId != normalizedId) {
+            key = makeLocationKeyWithId(locationId, alternateId);
+            result = locationMap.get(key);
+        }
 
         // 如果精确匹配找不到，尝试查找最近的相同 roadPieceId 的片段
         if (result == null) {
-            result = findNearestPieceById(locationId, roadPieceId);
+            result = findNearestPieceById(locationId, normalizedId);
+        }
+        if (result == null && alternateId != normalizedId) {
+            result = findNearestPieceById(locationId, alternateId);
         }
 
         return result;
+    }
+
+    /**
+     * 标准化 START/FINISH ID
+     */
+    private int normalizeStartFinish(int roadPieceId) {
+        // START=33, FINISH=34 都返回原值，让后续逻辑处理
+        return roadPieceId;
+    }
+
+    /**
+     * 获取 START/FINISH 的备用 ID
+     */
+    private int getAlternateStartFinish(int roadPieceId) {
+        if (roadPieceId == 33) return 34;  // START -> FINISH
+        if (roadPieceId == 34) return 33;  // FINISH -> START
+        return roadPieceId;
     }
 
     /**

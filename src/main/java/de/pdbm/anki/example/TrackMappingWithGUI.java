@@ -60,6 +60,15 @@ public class TrackMappingWithGUI extends Application {
     private boolean mappingFinished = false;
     private boolean isScanning = true;
 
+    // 追踪每辆车当前所在的片段索引 (Key: vehicleId, Value: pieceIndex)
+    private final Map<String, Integer> vehicleCurrentPiece = new ConcurrentHashMap<>();
+    // 追踪每辆车在当前片段内的最大进度（用于过滤后退噪声）
+    private final Map<String, Double> vehicleMaxProgress = new ConcurrentHashMap<>();
+    // 每辆车自己的 locationId 映射 (Key: vehicleId, Value: 该车的 TrackMapData)
+    private final Map<String, TrackMapData> vehicleTrackMaps = new ConcurrentHashMap<>();
+    // 正在校准的车辆
+    private final Map<String, SimpleTrackMapper> vehicleCalibrationMappers = new ConcurrentHashMap<>();
+
     public static void main(String[] args) {
         launch(args);
     }
@@ -171,22 +180,28 @@ public class TrackMappingWithGUI extends Application {
     }
 
     /**
-     * 配置车辆行为：区分“建图车”和“参赛车”
+     * 配置车辆行为：每辆车都需要建图以获取自己的 locationId 映射
      */
     private void configureVehicleBehavior(AnkiController controller, String address) {
         Vehicle vehicle = controller.getVehicle();
         if (vehicle == null) return;
 
-        // 策略：第一辆连上的车负责建图，除非图已经建好了
-        boolean isMapper = (connectedVehicles.size() == 1) && !mappingFinished;
+        // 策略：每辆车都需要跑一圈建图，获取自己的 locationId 映射
+        boolean isFirstMapper = (connectedVehicles.size() == 1) && !mappingFinished;
+        boolean needsCalibration = !vehicleTrackMaps.containsKey(address);
 
-        if (isMapper) {
-            System.out.println("🗺️ 车辆 " + address + " 指定为【建图车辆】");
+        if (isFirstMapper) {
+            // 第一辆车：完整建图
+            System.out.println("🗺️ 车辆 " + address + " 指定为【主建图车辆】");
             Platform.runLater(() -> updateStatus("开始建图: " + address + " 正在行驶..."));
             startMappingRun(controller);
+        } else if (needsCalibration && mappingFinished) {
+            // 后续车辆：校准建图（使用已知的轨道结构）
+            System.out.println("🔧 车辆 " + address + " 开始【校准建图】");
+            Platform.runLater(() -> updateStatus("校准中: " + address + " 正在跑一圈..."));
+            startCalibrationRun(controller, address);
         } else {
-            System.out.println("🏁 车辆 " + address + " 指定为【参赛车辆】");
-            // 参赛车辆可以在这里做一些初始化，比如开灯
+            System.out.println("🏁 车辆 " + address + " 已就绪");
             vehicle.toggleAllLights(true);
         }
 
@@ -200,6 +215,77 @@ public class TrackMappingWithGUI extends Application {
     }
 
     /**
+     * 启动校准建图流程（后续车辆用）
+     * 使用已知的轨道结构，只记录该车的 locationId 映射
+     */
+    private void startCalibrationRun(AnkiController controller, String vehicleId) {
+        // 为这辆车创建独立的 mapper
+        SimpleTrackMapper calibrationMapper = new SimpleTrackMapper();
+        vehicleCalibrationMappers.put(vehicleId, calibrationMapper);
+
+        calibrationMapper.startMapping(new SimpleTrackMapper.TrackMappingCallback() {
+            @Override
+            public void onTrackComplete(List<TrackPiece> pieces) {
+                System.out.println("🎉 车辆 " + vehicleId + " 校准完成！");
+
+                // 停止车辆
+                controller.stopTrackMapping();
+                controller.stop();
+
+                // 存储这辆车专属的地图数据
+                TrackMapData vehicleMapData = new TrackMapData(pieces);
+                vehicleTrackMaps.put(vehicleId, vehicleMapData);
+
+                // 清理
+                vehicleCalibrationMappers.remove(vehicleId);
+
+                // 打印 location 范围
+                System.out.println("\n📍 车辆 " + vehicleId + " 的 Location 范围:");
+                for (int i = 0; i < pieces.size(); i++) {
+                    TrackPiece p = pieces.get(i);
+                    System.out.printf("  #%d: %s ID=%d  Location:[%d-%d]\n",
+                            i, p.roadPiece, p.roadPieceId,
+                            p.startLocation, p.endLocation);
+                }
+
+                Platform.runLater(() -> updateStatus("✅ 车辆 " + vehicleId + " 校准完成！"));
+            }
+
+            @Override
+            public void onPieceAdded(TrackPiece piece) {
+                // 校准时不更新地图显示（地图已经有了）
+            }
+        });
+
+        // 开始行驶校准
+        controller.startTrackMapping(MAPPING_SPEED, calibrationMapper);
+    }
+
+    /**
+     * 检查所有已连接车辆，为未校准的车辆启动校准
+     */
+    private void startPendingCalibrations() {
+        for (Map.Entry<String, AnkiController> entry : connectedVehicles.entrySet()) {
+            String address = entry.getKey();
+            AnkiController controller = entry.getValue();
+
+            // 跳过已有地图数据的车辆
+            if (vehicleTrackMaps.containsKey(address)) {
+                continue;
+            }
+
+            // 跳过正在校准的车辆
+            if (vehicleCalibrationMappers.containsKey(address)) {
+                continue;
+            }
+
+            System.out.println("🔧 检测到未校准车辆: " + address + "，启动校准...");
+            Platform.runLater(() -> updateStatus("校准中: " + address + " 正在跑一圈..."));
+            startCalibrationRun(controller, address);
+        }
+    }
+
+    /**
      * 启动建图流程 (仅对第一辆车)
      */
     private void startMappingRun(AnkiController controller) {
@@ -207,7 +293,8 @@ public class TrackMappingWithGUI extends Application {
         sharedMapper.startMapping(new SimpleTrackMapper.TrackMappingCallback() {
             @Override
             public void onTrackComplete(List<TrackPiece> pieces) {
-                System.out.println("🎉 轨道闭合！建图完成！");
+                String vehicleId = controller.getVehicle().getMacAddress();
+                System.out.println("🎉 车辆 " + vehicleId + " 轨道闭合！建图完成！");
                 mappingFinished = true;
 
                 // 停止建图车
@@ -216,6 +303,18 @@ public class TrackMappingWithGUI extends Application {
 
                 // 生成并保存地图数据
                 finalTrackData = new TrackMapData(pieces);
+                // 同时为这辆车存储专属的地图数据
+                vehicleTrackMaps.put(vehicleId, finalTrackData);
+
+                // 调试：打印每个片段的 location 范围
+                System.out.println("\n📍 轨道片段 Location 范围:");
+                for (int i = 0; i < pieces.size(); i++) {
+                    TrackPiece p = pieces.get(i);
+                    System.out.printf("  #%d: (%d,%d) %s ID=%d  Location:[%d-%d]\n",
+                            i, p.x, p.y, p.roadPiece, p.roadPieceId,
+                            p.startLocation, p.endLocation);
+                }
+                System.out.println();
 
                 // GUI 更新
                 Platform.runLater(() -> {
@@ -230,6 +329,9 @@ public class TrackMappingWithGUI extends Application {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+
+                // 建图完成后，检查其他已连接的车辆是否需要校准
+                startPendingCalibrations();
             }
 
             @Override
@@ -243,55 +345,129 @@ public class TrackMappingWithGUI extends Application {
         controller.startTrackMapping(MAPPING_SPEED, sharedMapper);
     }
 
-    /**
-     * 全局位置处理：计算精确的 (x,y) 和 角度
-     */
     private void handleGlobalPositionUpdate(AnkiController controller, PositionUpdate update) {
         String vehicleId = controller.getVehicle().getMacAddress();
 
-        if (finalTrackData != null) {
-            TrackMapData.PieceLocationInfo info = finalTrackData.findPieceByLocationAndId(
-                    update.getLocation(), update.getRoadPieceId());
+        // 必须有全局地图数据才能显示
+        if (finalTrackData == null) return;
 
-            if (info != null) {
-                TrackPiece piece = info.piece;
+        // 获取该车自己的地图数据（用于 locationId 查找）
+        TrackMapData vehicleData = vehicleTrackMaps.get(vehicleId);
+        if (vehicleData == null) {
+            // 还没校准，暂时不显示
+            return;
+        }
 
-                // 1. 计算 Tile 左上角的屏幕坐标
-                List<TrackPiece> pieces = finalTrackData.getPieces();
-                int minX = pieces.stream().mapToInt(p -> p.x).min().orElse(0);
-                int maxY = pieces.stream().mapToInt(p -> p.y).max().orElse(0);
+        List<TrackPiece> vehiclePieces = vehicleData.getPieces();
+        List<TrackPiece> canonicalPieces = finalTrackData.getPieces();
+        int pieceCount = vehiclePieces.size();
 
-                double tileOriginX = (piece.x - minX) * TILE_SIZE;
-                double tileOriginY = (maxY - piece.y) * TILE_SIZE;
+        int locationId = update.getLocation();
+        int roadPieceId = update.getRoadPieceId();
 
-                // 2. 计算 Tile 内部的精确偏移量 (Local Offset)
-                // === 修复点：使用 TrajectoryCalculator.TrajectoryPoint ===
-                TrajectoryCalculator.TrajectoryPoint localPoint = TrajectoryCalculator.calculatePoint(
-                        piece.roadPiece,
-                        piece.enterDirection,
-                        piece.exitDirection,
-                        info.progress, // 0.0 - 1.0
-                        TILE_SIZE
-                );
+        // 获取当前片段索引
+        int currentIndex = vehicleCurrentPiece.getOrDefault(vehicleId, -1);
 
-                // 3. 合成全局坐标
-                double screenX = tileOriginX + localPoint.x;
-                double screenY = tileOriginY + localPoint.y;
-// === 🔴 在这里加上调试日志 ===
-                System.out.println("🚗 [DEBUG] 小车计算位置:");
-                System.out.printf("   RoadPiece: %s (ID:%d) 方向: %s->%s\n",
-                        info.piece.roadPiece, info.piece.roadPieceId,
-                        info.piece.enterDirection, info.piece.exitDirection);
-                System.out.printf("   进度: %.2f%%  计算坐标: (%.2f, %.2f)\n",
-                        info.progress * 100, screenX, screenY);
-                System.out.println("------------------------------------------------");
-                // ============================
-                // 4. 更新可视化 (位置 + 角度)
-                visualizer.updateVehiclePosition(vehicleId, screenX, screenY);
-                visualizer.updateVehicleAngle(vehicleId, localPoint.angle);
+        int matchedIndex = -1;
+        double progress = 0.5;
+
+        // 优先在当前和相邻片段中搜索（只匹配 roadPieceId）
+        if (currentIndex >= 0) {
+            int[] searchOrder = {
+                currentIndex,
+                (currentIndex + 1) % pieceCount,
+                (currentIndex - 1 + pieceCount) % pieceCount
+            };
+
+            for (int idx : searchOrder) {
+                TrackPiece piece = vehiclePieces.get(idx);
+                if (isRoadPieceIdMatch(piece.roadPieceId, roadPieceId)) {
+                    matchedIndex = idx;
+                    // 计算进度（使用该车自己的 locationId 范围）
+                    int start = Math.min(piece.startLocation, piece.endLocation);
+                    int end = Math.max(piece.startLocation, piece.endLocation);
+                    if (end > start && locationId >= start && locationId <= end) {
+                        progress = (locationId - start) / (double)(end - start);
+                    }
+                    break;
+                }
             }
         }
+
+        // 如果相邻搜索失败，全局搜索（首次定位）
+        if (matchedIndex < 0) {
+            for (int i = 0; i < pieceCount; i++) {
+                TrackPiece piece = vehiclePieces.get(i);
+                if (isRoadPieceIdMatch(piece.roadPieceId, roadPieceId)) {
+                    int start = Math.min(piece.startLocation, piece.endLocation);
+                    int end = Math.max(piece.startLocation, piece.endLocation);
+                    // 优先选择 locationId 在范围内的
+                    if (locationId >= start && locationId <= end) {
+                        matchedIndex = i;
+                        if (end > start) {
+                            progress = (locationId - start) / (double)(end - start);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (matchedIndex < 0 || matchedIndex >= canonicalPieces.size()) return;
+
+        // 过滤同一片段内的后退（防止 3→2→3 的抖动）
+        int previousIndex = vehicleCurrentPiece.getOrDefault(vehicleId, -1);
+        double previousMaxProgress = vehicleMaxProgress.getOrDefault(vehicleId, 0.0);
+
+        if (matchedIndex == previousIndex) {
+            // 还在同一片段内，进度只能向前，不能后退
+            if (progress < previousMaxProgress) {
+                // 后退了，忽略这次更新（使用之前的最大进度）
+                progress = previousMaxProgress;
+            } else {
+                // 前进了，更新最大进度
+                vehicleMaxProgress.put(vehicleId, progress);
+            }
+        } else {
+            // 换了片段，重置进度追踪
+            vehicleCurrentPiece.put(vehicleId, matchedIndex);
+            vehicleMaxProgress.put(vehicleId, progress);
+        }
+
+        // 用相同索引从全局地图获取"标准"片段（坐标正确）
+        TrackPiece displayPiece = canonicalPieces.get(matchedIndex);
+
+        // 计算屏幕坐标
+        int minX = canonicalPieces.stream().mapToInt(p -> p.x).min().orElse(0);
+        int maxY = canonicalPieces.stream().mapToInt(p -> p.y).max().orElse(0);
+
+        double tileOriginX = (displayPiece.x - minX) * TILE_SIZE;
+        double tileOriginY = (maxY - displayPiece.y) * TILE_SIZE;
+
+        TrajectoryCalculator.TrajectoryPoint localPoint = TrajectoryCalculator.calculatePoint(
+                displayPiece.roadPiece,
+                displayPiece.enterDirection,
+                displayPiece.exitDirection,
+                progress,
+                TILE_SIZE
+        );
+
+        double screenX = tileOriginX + localPoint.x;
+        double screenY = tileOriginY + localPoint.y;
+
+        visualizer.updateVehiclePosition(vehicleId, screenX, screenY);
+        visualizer.updateVehicleAngle(vehicleId, localPoint.angle);
     }
+
+    /**
+     * 检查 roadPieceId 是否匹配（考虑 START=33 和 FINISH=34 互换）
+     */
+    private boolean isRoadPieceIdMatch(int pieceId, int queryId) {
+        if (pieceId == queryId) return true;
+        // START(33) 和 FINISH(34) 视为相同
+        return (pieceId == 33 || pieceId == 34) && (queryId == 33 || queryId == 34);
+    }
+
     private void updateStatus(String message) {
         Platform.runLater(() -> {
             if (statusLabel != null) {
