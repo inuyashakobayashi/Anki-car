@@ -2,24 +2,27 @@ package de.pdbm.anki.gui;
 
 import de.pdbm.anki.api.AnkiController;
 import de.pdbm.janki.Vehicle;
-import de.pdbm.janki.notifications.BatteryListener;
-import de.pdbm.janki.notifications.BatteryNotification;
-import de.pdbm.janki.notifications.Message;
+import de.pdbm.janki.notifications.*;
 import eu.hansolo.tilesfx.Tile;
 import eu.hansolo.tilesfx.TileBuilder;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
+import javafx.util.Duration;
 
 /**
  * 增强版车辆控制仪表盘
- * 新增：速度滑块控制、尾灯控制
+ * 功能：速度控制、车灯控制、灯光图案、脱轨警告
  */
 public class VehicleDashboard extends VBox {
 
@@ -31,8 +34,19 @@ public class VehicleDashboard extends VBox {
     private Tile speedControlTile; // 控制速度 (滑块)
     private Tile batteryTile;
     private Tile headLightTile;
-    private Tile tailLightTile;    // 新增：尾灯
+    private Tile tailLightTile;    // 尾灯
     private Tile controlTile;      // 按钮区域
+    private Tile lightPatternTile; // 灯光图案控制
+
+    // 脱轨警告相关
+    private boolean isDelocalized = false;
+    private Timeline delocalizedFlashTimeline;
+    private final Color normalStatusColor = Color.web("#3e3e3e");
+    private final Color warningColor = Color.web("#e74c3c");
+
+    // 额外状态
+    private String firmwareVersion = "Unknown";
+    private boolean isOnCharger = false;
 
     public VehicleDashboard(AnkiController controller) {
         this.controller = controller;
@@ -50,7 +64,6 @@ public class VehicleDashboard extends VBox {
         HBox topRow = new HBox(10, statusTile, batteryTile);
 
         // 2. 速度显示与控制并排
-        // 左边是表盘(看)，右边是滑块(控)
         HBox speedRow = new HBox(10, speedGaugeTile, speedControlTile);
 
         // 3. 车灯控制行 (前灯 + 后灯)
@@ -61,54 +74,97 @@ public class VehicleDashboard extends VBox {
                 topRow,
                 speedRow,
                 lightRow,
+                lightPatternTile,  // 灯光图案控制
                 controlTile
         );
+
+        // 初始化脱轨警告闪烁动画
+        initDelocalizedFlashAnimation();
+
+        // 启动时查询固件版本
+        queryInitialInfo();
     }
+
+    /**
+     * 初始化脱轨警告闪烁动画
+     */
+    private void initDelocalizedFlashAnimation() {
+        delocalizedFlashTimeline = new Timeline(
+                new KeyFrame(Duration.millis(0), e -> {
+                    if (isDelocalized) {
+                        statusTile.setBackgroundColor(warningColor);
+                    }
+                }),
+                new KeyFrame(Duration.millis(500), e -> {
+                    if (isDelocalized) {
+                        statusTile.setBackgroundColor(Color.web("#8B0000")); // 深红
+                    }
+                })
+        );
+        delocalizedFlashTimeline.setCycleCount(Timeline.INDEFINITE);
+    }
+
+    /**
+     * 启动时查询固件版本
+     */
+    private void queryInitialInfo() {
+        Platform.runLater(() -> {
+            if (controller.getVehicle() != null) {
+                controller.getVehicle().queryVersion();
+            }
+        });
+    }
+
+    // 统一尺寸常量 - 方便调整 (增大尺寸以显示更大字体)
+    private static final double TILE_WIDTH = 220;        // 单个 Tile 宽度
+    private static final double TILE_HEIGHT_SMALL = 150; // 小 Tile 高度
+    private static final double TILE_HEIGHT_LARGE = 210; // 大 Tile 高度
+    private static final double TOTAL_WIDTH = TILE_WIDTH * 2 + 10; // 总宽度
 
     private void initTiles() {
         // --- 1. 状态 Tile ---
         statusTile = TileBuilder.create()
                 .skinType(Tile.SkinType.TEXT)
-                .title("Status")
+                .title("STATUS")
                 .text("Connected")
                 .description(getVehicleMacSafe())
                 .textAlignment(TextAlignment.CENTER)
-                .prefSize(180, 120) // 稍微调小一点以适应并排
+                .prefSize(TILE_WIDTH, TILE_HEIGHT_SMALL)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
         // --- 2. 电池 Tile ---
         batteryTile = TileBuilder.create()
                 .skinType(Tile.SkinType.PERCENTAGE)
-                .title("Battery")
+                .title("BATTERY")
                 .unit("mV")
-                .maxValue(4200) // 满电电压约 4.2V
-                .prefSize(180, 120)
+                .maxValue(4200)
+                .prefSize(TILE_WIDTH, TILE_HEIGHT_SMALL)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
         // --- 3. 速度显示 (Gauge) ---
         speedGaugeTile = TileBuilder.create()
                 .skinType(Tile.SkinType.GAUGE)
-                .title("Speedometer")
+                .title("SPEEDOMETER")
                 .unit("mm/s")
                 .maxValue(1000)
                 .threshold(800)
-                .prefSize(180, 180)
+                .prefSize(TILE_WIDTH, TILE_HEIGHT_LARGE)
                 .backgroundColor(Color.web("#222"))
                 .build();
 
-        // --- 4. 速度控制 (Slider) [新增!] ---
+        // --- 4. 速度控制 (Slider) ---
         speedControlTile = TileBuilder.create()
                 .skinType(Tile.SkinType.SLIDER)
-                .title("Throttle")
+                .title("THROTTLE")
                 .text("Set Speed")
                 .unit("mm/s")
                 .maxValue(1000)
                 .value(0)
-                .prefSize(180, 180)
+                .prefSize(TILE_WIDTH, TILE_HEIGHT_LARGE)
                 .backgroundColor(Color.web("#222"))
-                .barColor(Color.web("#3498db")) // 蓝色进度条
+                .barColor(Color.web("#3498db"))
                 .build();
 
         // 监听滑块事件 -> 设置车速
@@ -125,25 +181,23 @@ public class VehicleDashboard extends VBox {
         // --- 5. 前灯开关 ---
         headLightTile = TileBuilder.create()
                 .skinType(Tile.SkinType.SWITCH)
-                .title("Headlights")
-                .prefSize(180, 120)
+                .title("HEADLIGHTS")
+                .prefSize(TILE_WIDTH, TILE_HEIGHT_SMALL)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
         headLightTile.setOnSwitchPressed(e -> {
             if (controller.getVehicle() != null) {
-                // 这是一个简单的实现：开关前大灯
                 controller.getVehicle().setLight(Message.LIGHT_HEADLIGHTS, headLightTile.isActive());
-                // 顺便把前辅助灯也开了，更亮
                 controller.getVehicle().setLight(Message.LIGHT_FRONTLIGHTS, headLightTile.isActive());
             }
         });
 
-        // --- 6. 尾灯开关 [新增!] ---
+        // --- 6. 尾灯开关 ---
         tailLightTile = TileBuilder.create()
                 .skinType(Tile.SkinType.SWITCH)
-                .title("Taillights")
-                .prefSize(180, 120)
+                .title("TAILLIGHTS")
+                .prefSize(TILE_WIDTH, TILE_HEIGHT_SMALL)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
 
@@ -154,11 +208,73 @@ public class VehicleDashboard extends VBox {
             }
         });
 
-        // --- 7. 按钮控制区 ---
+        // --- 7. 灯光图案控制 ---
+        VBox lightPatternBox = new VBox(10);
+        lightPatternBox.setAlignment(Pos.CENTER);
+        lightPatternBox.setPadding(new Insets(8));
+
+        Label patternLabel = new Label("RGB Light Effects");
+        patternLabel.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold;");
+
+        // 灯光效果按钮 - 使用 GridPane 布局
+        GridPane patternBtnGrid = new GridPane();
+        patternBtnGrid.setHgap(5);
+        patternBtnGrid.setVgap(5);
+        patternBtnGrid.setAlignment(Pos.CENTER);
+
+        Button btnRedThrob = createSmallButton("Red", "#e74c3c");
+        btnRedThrob.setOnAction(e -> {
+            if (controller.getVehicle() != null) controller.getVehicle().lightPatternRedThrob(30);
+        });
+
+        Button btnBlueThrob = createSmallButton("Blue", "#3498db");
+        btnBlueThrob.setOnAction(e -> {
+            if (controller.getVehicle() != null) controller.getVehicle().lightPatternBlueThrob(30);
+        });
+
+        Button btnGreenThrob = createSmallButton("Green", "#2ecc71");
+        btnGreenThrob.setOnAction(e -> {
+            if (controller.getVehicle() != null) controller.getVehicle().lightPatternGreenThrob(30);
+        });
+
+        Button btnPolice = createSmallButton("Police", "#9b59b6");
+        btnPolice.setOnAction(e -> {
+            if (controller.getVehicle() != null) controller.getVehicle().lightPatternPolice();
+        });
+
+        Button btnRainbow = createSmallButton("Rainbow", "#f39c12");
+        btnRainbow.setOnAction(e -> {
+            if (controller.getVehicle() != null) controller.getVehicle().lightPatternRainbow();
+        });
+
+        Button btnLightOff = createSmallButton("OFF", "#7f8c8d");
+        btnLightOff.setOnAction(e -> {
+            if (controller.getVehicle() != null) controller.getVehicle().lightPatternOff();
+        });
+
+        // 布局: 3x2
+        patternBtnGrid.add(btnRedThrob, 0, 0);
+        patternBtnGrid.add(btnBlueThrob, 1, 0);
+        patternBtnGrid.add(btnGreenThrob, 2, 0);
+        patternBtnGrid.add(btnPolice, 0, 1);
+        patternBtnGrid.add(btnRainbow, 1, 1);
+        patternBtnGrid.add(btnLightOff, 2, 1);
+
+        lightPatternBox.getChildren().addAll(patternLabel, patternBtnGrid);
+
+        lightPatternTile = TileBuilder.create()
+                .skinType(Tile.SkinType.CUSTOM)
+                .title("LIGHT PATTERNS")
+                .graphic(lightPatternBox)
+                .prefSize(TOTAL_WIDTH, 150)
+                .backgroundColor(Color.web("#3e3e3e"))
+                .build();
+
+        // --- 8. 按钮控制区 ---
         GridPane btnGrid = new GridPane();
-        btnGrid.setHgap(5);
-        btnGrid.setVgap(5);
-        btnGrid.setPadding(new Insets(5));
+        btnGrid.setHgap(8);
+        btnGrid.setVgap(8);
+        btnGrid.setPadding(new Insets(10));
         btnGrid.setAlignment(Pos.CENTER);
 
         Button btnStop = createStyledButton("STOP", "#e74c3c");
@@ -194,18 +310,26 @@ public class VehicleDashboard extends VBox {
 
         controlTile = TileBuilder.create()
                 .skinType(Tile.SkinType.CUSTOM)
-                .title("Control Pad")
+                .title("CONTROL PAD")
                 .graphic(btnGrid)
-                .prefSize(370, 250) // 宽度占满
+                .prefSize(TOTAL_WIDTH, 270)
                 .backgroundColor(Color.web("#3e3e3e"))
                 .build();
     }
 
     private Button createStyledButton(String text, String color) {
         Button btn = new Button(text);
-        btn.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 16px;");
-        btn.setPrefWidth(165); // 按钮宽度适配
-        btn.setPrefHeight(40);
+        btn.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 18px;");
+        btn.setPrefWidth(210);
+        btn.setPrefHeight(45);
+        return btn;
+    }
+
+    private Button createSmallButton(String text, String color) {
+        Button btn = new Button(text);
+        btn.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 13px;");
+        btn.setPrefWidth(140);
+        btn.setPrefHeight(35);
         return btn;
     }
 
@@ -213,14 +337,85 @@ public class VehicleDashboard extends VBox {
         Vehicle v = controller.getVehicle();
         if (v == null) return;
 
-        // 监听电池电量 (需要之前的 BatteryNotification 支持)
+        // 监听电池电量
         v.addNotificationListener((BatteryListener) update -> {
             Platform.runLater(() -> {
-                // 更新电池 Tile，直接显示 mV
                 batteryTile.setValue(update.getBatteryLevelMs());
                 batteryTile.setDescription(String.format("%.1f V", update.getBatteryLevelMs() / 1000.0));
             });
         });
+
+        // 监听脱轨事件
+        v.addNotificationListener((DelocalizedListener) notification -> {
+            Platform.runLater(() -> {
+                setDelocalized(true);
+            });
+        });
+
+        // 监听位置更新 - 收到位置说明车辆回到轨道
+        v.addNotificationListener((PositionUpdateListener) update -> {
+            Platform.runLater(() -> {
+                if (isDelocalized) {
+                    setDelocalized(false);
+                }
+            });
+        });
+
+        // 监听版本响应
+        v.addNotificationListener((VersionResponseListener) response -> {
+            Platform.runLater(() -> {
+                firmwareVersion = response.getVersionString();
+                updateStatusDisplay();
+            });
+        });
+
+        // 监听充电器状态
+        v.addNotificationListener((ChargerInfoNotificationListener) notification -> {
+            Platform.runLater(() -> {
+                isOnCharger = notification.isOnCharger();
+                updateStatusDisplay();
+            });
+        });
+    }
+
+    /**
+     * 设置脱轨状态
+     */
+    private void setDelocalized(boolean delocalized) {
+        this.isDelocalized = delocalized;
+        if (delocalized) {
+            // 开始闪烁警告
+            statusTile.setText("OFF TRACK!");
+            statusTile.setTextColor(Color.WHITE);
+            delocalizedFlashTimeline.play();
+        } else {
+            // 恢复正常
+            delocalizedFlashTimeline.stop();
+            statusTile.setBackgroundColor(normalStatusColor);
+            statusTile.setText("Connected");
+            updateStatusDisplay();
+        }
+    }
+
+    /**
+     * 更新状态显示 (版本、充电状态)
+     */
+    private void updateStatusDisplay() {
+        StringBuilder desc = new StringBuilder();
+        desc.append(getVehicleMacSafe());
+
+        if (!"Unknown".equals(firmwareVersion)) {
+            desc.append("\nFW: v").append(firmwareVersion);
+        }
+
+        if (isOnCharger) {
+            desc.append("\n[CHARGING]");
+            statusTile.setText("Charging");
+        } else if (!isDelocalized) {
+            statusTile.setText("Connected");
+        }
+
+        statusTile.setDescription(desc.toString());
     }
 
     // 安全获取 MAC 地址的辅助方法
