@@ -293,6 +293,26 @@ public class Vehicle {
                         if (l instanceof BatteryListener bl) bl.onBatteryLevel(bn);
                     }
                 }
+                case PingResponse pr -> {
+                    for (NotificationListener l : listeners) {
+                        if (l instanceof PingResponseListener prl) prl.onPingResponse(pr);
+                    }
+                }
+                case VersionResponse vr -> {
+                    for (NotificationListener l : listeners) {
+                        if (l instanceof VersionResponseListener vrl) vrl.onVersionResponse(vr);
+                    }
+                }
+                case DelocalizedNotification dn -> {
+                    for (NotificationListener l : listeners) {
+                        if (l instanceof DelocalizedListener dl) dl.onDelocalized(dn);
+                    }
+                }
+                case OffsetFromRoadCenterUpdate ou -> {
+                    for (NotificationListener l : listeners) {
+                        if (l instanceof OffsetFromRoadCenterUpdateListener ol) ol.onOffsetUpdate(ou);
+                    }
+                }
                 default -> {}
             }
         } catch (Exception e) {
@@ -338,6 +358,106 @@ public class Vehicle {
         System.out.println("正在查询电池电量...");
         sendWrite(Message.batteryLevelRequest());
     }
+
+    // --- 新增: Ping 方法 ---
+    /**
+     * 发送 Ping 请求以检测车辆连接状态
+     * 车辆会返回 PingResponse 通知
+     */
+    public void ping() {
+        System.out.println("发送 Ping 请求...");
+        sendWrite(Message.pingRequest());
+    }
+
+    // --- 新增: 查询版本方法 ---
+    /**
+     * 查询车辆固件版本
+     * 车辆会返回 VersionResponse 通知
+     */
+    public void queryVersion() {
+        System.out.println("正在查询固件版本...");
+        sendWrite(Message.versionRequest());
+    }
+
+    // --- 新增: 取消变道 ---
+    /**
+     * 取消正在进行的变道操作
+     */
+    public void cancelLaneChange() {
+        System.out.println("取消变道...");
+        sendWrite(Message.cancelLaneChangeMessage());
+    }
+
+    // --- 新增: 灯光图案方法 ---
+
+    /**
+     * 设置单通道灯光图案
+     * @param channel 灯光通道 (Message.LIGHT_CHANNEL_RED, BLUE, GREEN, etc.)
+     * @param effect 效果 (Message.EFFECT_STEADY, FADE, THROB, FLASH, RANDOM)
+     * @param start 起始亮度 (0-14)
+     * @param end 结束亮度 (0-14)
+     * @param cyclesPerMin 每分钟循环次数
+     */
+    public void setLightPattern(byte channel, byte effect, byte start, byte end, int cyclesPerMin) {
+        sendWrite(Message.lightsPatternMessage(channel, effect, start, end, cyclesPerMin));
+    }
+
+    /**
+     * 红色呼吸灯
+     */
+    public void lightPatternRedThrob(int cyclesPerMin) {
+        System.out.println("设置红色呼吸灯...");
+        sendWrite(Message.lightsPatternRedThrob(cyclesPerMin));
+    }
+
+    /**
+     * 蓝色呼吸灯
+     */
+    public void lightPatternBlueThrob(int cyclesPerMin) {
+        System.out.println("设置蓝色呼吸灯...");
+        sendWrite(Message.lightsPatternBlueThrob(cyclesPerMin));
+    }
+
+    /**
+     * 绿色呼吸灯
+     */
+    public void lightPatternGreenThrob(int cyclesPerMin) {
+        System.out.println("设置绿色呼吸灯...");
+        sendWrite(Message.lightsPatternGreenThrob(cyclesPerMin));
+    }
+
+    /**
+     * 警示红色闪烁
+     */
+    public void lightPatternWarning() {
+        System.out.println("设置警示闪烁...");
+        sendWrite(Message.lightsPatternWarningFlash());
+    }
+
+    /**
+     * 警车效果 (红蓝交替)
+     */
+    public void lightPatternPolice() {
+        System.out.println("设置警车效果...");
+        sendWrite(Message.lightsPatternPolice());
+    }
+
+    /**
+     * 彩虹效果
+     */
+    public void lightPatternRainbow() {
+        System.out.println("设置彩虹效果...");
+        sendWrite(Message.lightsPatternRainbow());
+    }
+
+    /**
+     * 关闭灯光图案
+     */
+    public void lightPatternOff() {
+        System.out.println("关闭灯光图案...");
+        sendWrite(Message.lightsPatternOff());
+    }
+
     // --- 新增掉头方法 ---
     public void uTurn() {
         System.out.println("🚗 发送掉头指令...");
