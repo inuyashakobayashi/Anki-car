@@ -94,7 +94,7 @@ public class TrackMappingWithGUI extends Application {
         ScrollPane scrollPane = new ScrollPane(dashboardContainer);
         scrollPane.setFitToWidth(true);
         scrollPane.setStyle("-fx-background: #333; -fx-border-color: transparent;");
-        scrollPane.setPrefWidth(320); // 仪表盘宽度
+        scrollPane.setPrefWidth(480); // 仪表盘宽度 (扩大以适应更大的 Tile)
         root.setRight(scrollPane);
 
         // 4. 顶部：状态栏
